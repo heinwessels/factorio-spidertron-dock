@@ -1,4 +1,4 @@
--- We will attempt to put the space spidertron
+-- We will attempt to put the spidertron-dock
 -- at the same technology as the regular spidertron
 -- to keep things simple. First we will look
 -- for the "spidertron" technology, It might be possible
@@ -30,10 +30,6 @@ if not spider_tech then
     error("Could not find technology unlocking spidertron")
 end
 
-table.insert(spider_tech.effects, {
-    type = "unlock-recipe",
-    recipe = "ss-space-spidertron"
-})
 table.insert(spider_tech.effects, {
     type = "unlock-recipe",
     recipe = "ss-spidertron-dock"

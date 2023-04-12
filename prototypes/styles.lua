@@ -4,7 +4,7 @@ styles["ss_undock_button"] = {
     type = "button_style",
     parent = "green_button",
     horizontal_align = "left",
-    tooltip = "space-spidertron-dock.undock-tooltip"
+    tooltip = "sd-spidertron-dock.undock-tooltip"
 }
 
 styles["ss_invisible_frame"] = {

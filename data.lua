@@ -1,6 +1,4 @@
-require("prototypes.space-spidertron")
 require("prototypes.dock")
 require("prototypes.sounds")
-require("prototypes.simulations")
 require("prototypes.styles")
 require("prototypes.input")

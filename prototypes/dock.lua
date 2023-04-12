@@ -6,7 +6,7 @@ local dock_active = {
     type = "accumulator",
     name = "ss-spidertron-dock-active",
     localised_name = {"entity-name.ss-spidertron-dock"},
-    icon = "__space-spidertron__/graphics/spidertron-dock/dock-icon.png",
+    icon = "__spidertron-dock__/graphics/spidertron-dock/dock-icon.png",
     placeable_by = {item="ss-spidertron-dock", count=1},
     minable = {mining_time = 0.1, result = "ss-spidertron-dock"},
     icon_size = 64, icon_mipmaps = 4,
@@ -35,7 +35,7 @@ local dock_active = {
         {
               -- Using "HR" for both, since it's more like halfway between
               -- high and normal resolution
-              filename = "__space-spidertron__/graphics/spidertron-dock/hr-dock.png",
+              filename = "__spidertron-dock__/graphics/spidertron-dock/hr-dock.png",
               priority = "low",
               width = 113,
               height = 120,
@@ -43,7 +43,7 @@ local dock_active = {
               shift = util.by_pixel(0, -4),
               scale = 0.6,
               hr_version = {
-                  filename = "__space-spidertron__/graphics/spidertron-dock/hr-dock.png",
+                  filename = "__spidertron-dock__/graphics/spidertron-dock/hr-dock.png",
                   priority = "low",
                   width = 113,
                   height = 120,
@@ -55,7 +55,7 @@ local dock_active = {
           {
             -- Using "HR" for both, since it's more like halfway between
             -- high and normal resolution
-            filename = "__space-spidertron__/graphics/spidertron-dock/dock-shadow.png",
+            filename = "__spidertron-dock__/graphics/spidertron-dock/dock-shadow.png",
             priority = "low",
             width = 126,
             height = 80,
@@ -64,7 +64,7 @@ local dock_active = {
             scale = 0.6,
             draw_as_shadow = true,
             hr_version = {
-                filename = "__space-spidertron__/graphics/spidertron-dock/dock-shadow.png",
+                filename = "__spidertron-dock__/graphics/spidertron-dock/dock-shadow.png",
                 priority = "low",
                 width = 126,
                 height = 80,
@@ -114,7 +114,7 @@ local dock_active = {
 local dock_item = {
     type = "item",
     name = "ss-spidertron-dock",
-    icon = "__space-spidertron__/graphics/spidertron-dock/dock-icon.png",
+    icon = "__spidertron-dock__/graphics/spidertron-dock/dock-icon.png",
     icon_size = 64, icon_mipmaps = 4,
     subgroup = "transport",
     order = "b[personal-transport]-c[spidertron]-d[spidertron-dock]",
@@ -149,12 +149,11 @@ dock_passive = data.raw.accumulator["ss-spidertron-dock-passive"]
 for i, dock in pairs({dock_active, dock_passive}) do
   dock.localised_description = {""}
   if mods["space-exploration"] then
-    table.insert(dock.localised_description, {"space-spidertron-dock.description-se"})
+    table.insert(dock.localised_description, {"sd-spidertron-dock.description-se"})
   else
-    table.insert(dock.localised_description, {"space-spidertron-dock.description"})
+    table.insert(dock.localised_description, {"sd-spidertron-dock.description"})
   end
-  table.insert(dock.localised_description, 
-    {"space-spidertron-dock.description-mode-"..(i==1 and "active" or "passive")})
-  table.insert(dock.localised_description, {"space-spidertron-dock.description-use"})
-  table.insert(dock.localised_description, {"space-spidertron-dock.supported"})
+  table.insert(dock.localised_description, {"sd-spidertron-dock.description-mode-"..(i==1 and "active" or "passive")})
+  table.insert(dock.localised_description, {"sd-spidertron-dock.description-use"})
+  table.insert(dock.localised_description, {"sd-spidertron-dock.supported"})
 end

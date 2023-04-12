@@ -166,7 +166,7 @@ function dock_does_not_support_spider(dock, spider)
     
     -- Is this spider type supported in the first place?
     if not global.spider_whitelist[spider_name] then
-        return {"space-spidertron-dock.spider-not-supported"}
+        return {"sd-spidertron-dock.spider-not-supported"}
     end
 
     -- Can the spider dock on this tile? This is to prevent terrestrial spiders
@@ -199,7 +199,7 @@ function dock_does_not_support_spider(dock, spider)
 
         -- If the leg would collide with the tile then it's not supported
         if collision_masks_collide(tile_collision_mask, leg_collision_mask) then
-            return {"space-spidertron-dock.spider-not-supported-on-tile"}
+            return {"sd-spidertron-dock.spider-not-supported-on-tile"}
         end
     end
 end
@@ -543,31 +543,6 @@ script.on_event(defines.events.on_player_used_spider_remote,
     end
 )
 
-function on_built(event)
-    -- If it's a space spidertron, set it to white as default
-    local entity = event.created_entity or event.entity
-    if entity and entity.valid then
-        if entity.name == "ss-space-spidertron" then
-            -- We only want to set it when the user has not set it
-            -- before. However, there's no way we can determine it.
-            -- Usually when it's placed initially the colour is that
-            -- orange-ish colour, and then we turn it white. So we
-            -- assume if it's the orangy-colour then the user has not
-            -- set it, so we turn it to white. 
-            if util.table.compare(
-                entity.color,
-                {r=1, g=0.5, b=0, a=0.5, }
-            ) then
-                entity.color = {1, 1, 1, 0.5} -- White
-            end
-        end
-    end
-end
-
-script.on_event(defines.events.on_robot_built_entity, on_built)
-script.on_event(defines.events.on_built_entity, on_built)
-script.on_event(defines.events.script_raised_built, on_built)
-
 function on_deconstructed(event)
     -- When the dock is destroyed then attempt undock the spider
     local entity = event.entity
@@ -660,7 +635,7 @@ script.on_event("ss-spidertron-dock-toggle", function(event)
     dock.surface.create_entity{
         name = "flying-text",
         position = dock.position,
-        text = {"space-spidertron-dock.mode-to-"..new_dock_data.mode},
+        text = {"sd-spidertron-dock.mode-to-"..new_dock_data.mode},
         color = {r=1,g=1,b=1,a=1},
     }
 
@@ -792,7 +767,7 @@ function update_spider_gui_for_player(player, spider)
         invisible_frame.add{
             type = "button",
             name = "spidertron-undock-button",
-            caption = {"space-spidertron-dock.undock"},
+            caption = {"sd-spidertron-dock.undock"},
             style = "ss_undock_button",
         }
     end
@@ -841,7 +816,7 @@ function update_dock_gui_for_player(player, dock)
         invisible_frame.add{
             type = "button",
             name = "spidertron-undock-button",
-            caption = {"space-spidertron-dock.undock"},
+            caption = {"sd-spidertron-dock.undock"},
             style = "ss_undock_button",
         }
     end
@@ -970,7 +945,7 @@ if script.active_mods["SpidertronEnhancements"] then
                 spider.surface.create_entity{
                     name = "flying-text",
                     position = spider.position,
-                    text = {"space-spidertron-dock.cannot-command"},
+                    text = {"sd-spidertron-dock.cannot-command"},
                     color = {r=1,g=1,b=1,a=1},
                 }
             end
@@ -1021,7 +996,6 @@ script.on_configuration_changed(function (event)
                     end
                 end
                 if technology_unlocks_spidertron then
-                    force.recipes["ss-space-spidertron"].enabled = technology.researched
                     force.recipes["ss-spidertron-dock"].enabled = technology.researched
                     break
                 end

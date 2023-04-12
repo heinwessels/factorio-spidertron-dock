@@ -190,8 +190,8 @@ function attempt_docked_spider(spider)
     -- Good enough to start the construction attempt
     local docked_spider = util.copy(spider)
     docked_spider.name = "ss-docked-"..spider.name
-    docked_spider.localised_name = {"space-spidertron-dock.docked-spider", spider.name}
-    docked_spider.localised_description = {"space-spidertron-dock.docked-spider-description"}
+    docked_spider.localised_name = {"sd-spidertron-dock.docked-spider", spider.name}
+    docked_spider.localised_description = {"sd-spidertron-dock.docked-spider-description"}
     
     docked_spider.minable = {result = nil, mining_time = 1}
     docked_spider.torso_bob_speed = 0
@@ -217,7 +217,7 @@ function attempt_docked_spider(spider)
     docked_spider.graphics_set.base_animation = {layers={
         -- Will also remove flames
         {
-            filename = "__space-spidertron__/graphics/spidertron-dock/dock-light.png",
+            filename = "__spidertron-dock__/graphics/spidertron-dock/dock-light.png",
             blend_mode = "additive",
             direction_count = 1,
             draw_as_glow = true,    -- Draws a sprite and a light
@@ -234,7 +234,7 @@ function attempt_docked_spider(spider)
 
             hr_version =
             {
-                filename = "__space-spidertron__/graphics/spidertron-dock/dock-light.png",
+                filename = "__spidertron-dock__/graphics/spidertron-dock/dock-light.png",
                 blend_mode = "additive",
                 direction_count = 1,
                 draw_as_glow = true,    -- Draws a sprite and a light
@@ -264,7 +264,7 @@ local function safely_insert_description(descriptions, addition)
         if (#descriptions + 1) < 19 then
             table.insert(descriptions, addition)
         else
-            table.insert(descriptions, {"space-spidertron-dock.etc"})
+            table.insert(descriptions, {"sd-spidertron-dock.etc"})
         end
     end
 end
@@ -282,7 +282,7 @@ for _, spider in pairs(data.raw["spider-vehicle"]) do
             found_at_least_one = true
 
             for _, description in pairs({dock_active_description, dock_passive_description}) do
-                safely_insert_description(description, {"space-spidertron-dock.supported-spider", spider.name})
+                safely_insert_description(description, {"sd-spidertron-dock.supported-spider", spider.name})
             end
             
         end
@@ -305,7 +305,7 @@ data:extend{
         name = "ss-docked-light",
         layers = {
             {
-                filename = "__space-spidertron__/graphics/spidertron-dock/dock-light.png",
+                filename = "__spidertron-dock__/graphics/spidertron-dock/dock-light.png",
                 blend_mode = "additive",
                 draw_as_glow = true,    -- Draws a sprite and a light
                 width = 19,
@@ -321,7 +321,7 @@ data:extend{
 
                 hr_version =
                 {
-                    filename = "__space-spidertron__/graphics/spidertron-dock/dock-light.png",
+                    filename = "__spidertron-dock__/graphics/spidertron-dock/dock-light.png",
                     blend_mode = "additive",
                     draw_as_glow = true,    -- Draws a sprite and a light
                     width = 19,
