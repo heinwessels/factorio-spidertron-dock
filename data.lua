@@ -1,4 +1,5 @@
 require("prototypes.dock")
+require("prototypes.dock-interface")
 require("prototypes.sounds")
 require("prototypes.styles")
 require("prototypes.input")

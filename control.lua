@@ -9,7 +9,7 @@ local function name_is_docked_spider(name)
     return not (string.match(name, "ss[-]docked[-]") == nil)
 end
 
-function create_dock_data(dock_entity)
+local function create_dock_data(dock_entity)
     return {
         occupied = false,
 
@@ -39,10 +39,22 @@ function create_dock_data(dock_entity)
         -- Dictates if an actual spider is placed
         -- while docking, or only a sprite.
         mode = string.find(dock_entity.name, "passive") and "passive" or "active",
+        
+        -- Keep track of the spider that was docked last so that
+        -- we can summon it
+        last_docked_spider = nil,
+
+        -- This is so that we can always find where this dock
+        -- is, even if the type and unit number change during migration.
+        position = dock_entity.position,
+
+        -- Map of interfaces referenced by their unit numbers, linked to
+        -- the interface entity. A dock can have multiple interfaces.
+        interfaces = { }
     }
 end
 
-function create_spider_data(spider_entity)
+local function create_spider_data(spider_entity)
     return {
         -- A spider will only attempt to dock
         -- if it's armed for that dock in
@@ -76,7 +88,29 @@ function create_spider_data(spider_entity)
     }
 end
 
-function get_dock_data_from_entity(dock)
+local function create_interface_data(interface)
+    return {
+        -- Keep this in here so that it's easy to
+        -- find this entry in global
+        unit_number = interface.unit_number,
+
+        -- This is so that we can always find where this interface
+        -- is, even if the type and unit number change during migration.
+        position = interface.position,
+
+        -- The dock entity this interface is connected to
+        dock = nil,
+
+        -- Cache this entity's circuit network connections for quick
+        -- processing times
+        circuit_network = {
+            red = interface.get_circuit_network(defines.wire_type.red),
+            green = interface.get_circuit_network(defines.wire_type.green),
+        },
+    }
+end
+
+local function get_dock_data_from_entity(dock)
     if not name_is_dock(dock.name) then return end
     local dock_data = global.docks[dock.unit_number]
     if not dock_data then
@@ -86,11 +120,11 @@ function get_dock_data_from_entity(dock)
     return dock_data
 end
 
-function get_spider_data_from_unit_number(spider_unit_number)
+local function get_spider_data_from_unit_number(spider_unit_number)
     return global.spiders[spider_unit_number]
 end
 
-function get_spider_data_from_entity(spider)
+local function get_spider_data_from_entity(spider)
     if not spider.type == "spider-vehicle" then return end
     local spider_data = global.spiders[spider.unit_number]
     if not spider_data then
@@ -103,7 +137,7 @@ end
 -- An function to call when an dock action
 -- was not allowed. It will play the "no-no"
 -- sound and create some flying text
-function dock_error(dock, text)
+local function dock_error(dock, text)
     dock.surface.play_sound{
         path="ss-no-no", 
         position=dock.position
@@ -149,7 +183,7 @@ end
 -- can reach the dock without stepping on restricted
 -- spaceship tiles
 -- Will return the text to display if there is no support
-function dock_does_not_support_spider(dock, spider)
+local function dock_does_not_support_spider(dock, spider)
 
     -- Hacky implementation where spider can be
     -- either the entity or the name of the entity.
@@ -357,7 +391,7 @@ end
 
 -- This will dock a spider, and not
 -- do any checks.
-function dock_spider(dock, spider)
+local function dock_spider(dock, spider)
     local dock_data = get_dock_data_from_entity(dock)
 
     -- Some smoke and mirrors
@@ -376,7 +410,7 @@ end
 
 -- This will undock a spider, and not
 -- do any checks.
-function undock_spider(dock)
+local function undock_spider(dock)
     local dock_data = get_dock_data_from_entity(dock)
 
     -- Some smoke and mirrors
@@ -396,7 +430,7 @@ end
 
 -- This function will attempt the dock
 -- of a spider.
-function attempt_dock(spider)
+local function attempt_dock(spider)
     local spider_data = get_spider_data_from_entity(spider)
     if not spider_data.armed_for then return end
 
@@ -438,7 +472,7 @@ function attempt_dock(spider)
     end
 end
 
-function attempt_undock(dock_data, player, force)
+local function attempt_undock(dock_data, player, force)
     if not dock_data.occupied then return end
     local dock = dock_data.dock_entity
     if not dock then error("dock_data had no associated entity") end
@@ -543,14 +577,116 @@ script.on_event(defines.events.on_player_used_spider_remote,
     end
 )
 
-function on_deconstructed(event)
+local function interface_get_connected_dock(interface)
+    -- Gets the connected dock by looking at the location
+    -- and not the interface's data. This is heavily based
+    -- on Klonan's Transport Drones, thanks!
+
+    -- Map between interface direction to the offset where we
+    -- expect the dock entity.
+    local circuit_offset_map = {
+        [0] = {0, 1},
+        [2] = {-1, 0},
+        [4] = {0, -1},
+        [6] = {1, 0},
+    }
+    local search_offset = circuit_offset_map[interface.direction]
+    if not search_offset then error("Unexpected interface direction") end
+    local search_position = interface.position
+    search_position.x = search_position.x + search_offset[1]
+    search_position.y = search_position.y + search_offset[2]
+
+    for _, found_entity in pairs(interface.surface.find_entities_filtered{
+        position = search_position,
+        name = {"ss-spidertron-dock-active", "ss-spidertron-dock-passive"}
+    }) do
+        return found_entity
+    end
+end
+
+local function interface_built(interface)
+    -- Create the data in global
+    global.interfaces[interface.unit_number] = create_interface_data(interface)
+
+    -- Disable rotation so that the dock it's interfacing
+    -- to can't change with a rotate
+    interface.rotatable = false
+
+    -- Determine if it has connected dock
+    dock = interface_get_connected_dock(interface)
+    if not dock then return end
+    dock.create_build_effect_smoke()    -- Cool connect effect
+    
+    -- Setup connections
+    dock_data = get_dock_data_from_entity(dock)
+    dock_data.interfaces[interface.unit_number] = interface
+    global.interfaces[interface.unit_number].dock = dock
+end
+
+local function dock_built(dock)
+    dock_data = get_dock_data_from_entity(dock)
+
+    -- Look for interfaces around this dock, and attempt to connect any of them
+    for _, interface in pairs (dock.surface.find_entities_filtered{
+        name = "sd-spidertron-dock-interface", 
+        radius = dock.get_radius() + 1, 
+        position = dock.position
+    }) do
+        if dock == interface_get_connected_dock(interface) then
+            -- This interface is pointing towards this dock
+            -- Setup the corresponding connections
+            dock_data.interfaces[interface.unit_number] = interface
+            global.interfaces[interface.unit_number].dock = dock
+            
+            interface.create_build_effect_smoke()    -- Cool effect
+        end
+    end
+end
+
+local function on_built(event)
+    -- If a dock interface is built we need to set it up
+    local entity = event.created_entity or event.entity
+    if not entity or not entity.valid then return end
+    local name = entity.name
+
+    if name == "sd-spidertron-dock-interface" then
+        interface_built(entity)
+        return
+    end
+
+    if name_is_dock(name) then
+        dock_built(entity)
+        return
+    end
+end
+
+script.on_event(defines.events.on_robot_built_entity, on_built)
+script.on_event(defines.events.on_built_entity, on_built)
+script.on_event(defines.events.script_raised_built, on_built)
+
+local function on_deconstructed(event)
     -- When the dock is destroyed then attempt undock the spider
     local entity = event.entity
     local player = event.player_index and game.get_player(event.player_index) or nil
     if entity and entity.valid then
         if name_is_dock(entity.name) then
             attempt_undock(get_dock_data_from_entity(entity), player, true)
+            for _, interface in pairs(global.docks[entity.unit_number].interfaces) do
+                if interface.valid then
+                    interface.create_build_effect_smoke()
+                    global.interfaces[interface.unit_number].dock = nil
+                end
+            end
             global.docks[entity.unit_number] = nil
+        elseif entity.name == "sd-spidertron-dock-interface" then
+            local interface_data = global.interfaces[entity.unit_number]
+            if not interface_data or not interface_data.dock then return end
+            if interface_data.dock.valid then
+                interface_data.dock.create_build_effect_smoke()
+                local dock_data = get_dock_data_from_entity(interface_data.dock)
+                dock_data.interfaces[entity.unit_number] = nil
+            end
+            global.interfaces[entity.unit_number] = nil
         elseif entity.type == "spider-vehicle" then
             if name_is_docked_spider(entity.name) then
                 local spider_data = get_spider_data_from_entity(entity)
@@ -648,7 +784,7 @@ end)
 -- We can move docks with picker dollies, regardless
 -- of if it contains a spider or not. We do not allow
 -- moving the spiders though 
-function picker_dollies_move_event(event)
+local function picker_dollies_move_event(event)
     local entity = event.moved_entity
     if entity.name == "ss-spidertron-dock-active" then
         local dock_data = get_dock_data_from_entity(entity)
@@ -722,7 +858,7 @@ script.on_event(defines.events.on_entity_cloned , function(event)
     end
 end)
 
-function update_spider_gui_for_player(player, spider)
+local function update_spider_gui_for_player(player, spider)
     
     -- Destroy whatever is there currently for
     -- any player. That's so that the player doesn't
@@ -773,7 +909,7 @@ function update_spider_gui_for_player(player, spider)
     end
 end
 
-function update_dock_gui_for_player(player, dock)
+local function update_dock_gui_for_player(player, dock)
     
     -- Destroy whatever is there currently for
     -- any player. That's so that the player doesn't
@@ -901,7 +1037,7 @@ local function sanitize_docks()
     end
 end
 
-function build_spider_whitelist()
+local function build_spider_whitelist()
     local whitelist = {}
     local spiders = game.get_filtered_entity_prototypes({{filter="type", type="spider-vehicle"}})
     for _, spider in pairs(spiders) do
@@ -913,7 +1049,7 @@ function build_spider_whitelist()
     return whitelist
 end
 
-function picker_dollies_blacklist_docked_spiders()
+local function picker_dollies_blacklist_docked_spiders()
     if remote.interfaces["PickerDollies"] and remote.interfaces["PickerDollies"]["add_blacklist_name"] then
         local spiders = game.get_filtered_entity_prototypes({{filter="type", type="spider-vehicle"}})
         for _, spider in pairs(spiders) do
@@ -958,6 +1094,7 @@ script.on_init(function()
     global.docks = {}
     global.spiders = {}
     global.spider_whitelist = build_spider_whitelist()
+    global.interfaces = {}
     picker_dollies_blacklist_docked_spiders()
     
     -- Add support for picker dollies
@@ -979,6 +1116,7 @@ script.on_configuration_changed(function (event)
     global.docks = global.docks or {}
     global.spiders = global.spiders or {}
     global.spider_whitelist = build_spider_whitelist()
+    global.interfaces = global.interfaces or {}
     
     picker_dollies_blacklist_docked_spiders()
     sanitize_docks()
@@ -997,6 +1135,7 @@ script.on_configuration_changed(function (event)
                 end
                 if technology_unlocks_spidertron then
                     force.recipes["ss-spidertron-dock"].enabled = technology.researched
+                    force.recipes["sd-spidertron-dock-interface"].enabled = technology.researched
                     break
                 end
             end

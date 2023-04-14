@@ -16,8 +16,7 @@ Also included is a spidertron dock for safe travel on spaceships. It's designed 
 - Mod compatability for other popular spider-related mods.
 
 # Credits
-- [Kirazy](https://mods.factorio.com/user/Kirazy) for the Spidertron eye mask
 - [Xorimuth](https://mods.factorio.com/user/Xorimuth) for the super useful `spidertron_lib`.
-- [Klonan](https://mods.factorio.com/mod/Companion_Drones) for how to make the spidertron fly.
+- [Klonan](https://mods.factorio.com/mod/Transport_Drones) for how to create an interface combinator.
 - [Earendel](https://mods.factorio.com/user/Earendel) for Space Exploration - the most epic mod on the portal!
 - justarandomgeek for this [Factorio debugger](https://marketplace.visualstudio.com/items?itemName=justarandomgeek.factoriomod-debug), without which this mod would not have been possible.
