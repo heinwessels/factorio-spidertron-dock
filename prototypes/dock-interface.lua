@@ -1,6 +1,7 @@
 local interface = util.copy(data.raw["constant-combinator"]["constant-combinator"])
 interface.name = "sd-spidertron-dock-interface"
-interface.item_slot_count = 2
+interface.item_slot_count = 1
+interface.allow_copy_paste = false
 interface.minable.result = "sd-spidertron-dock-interface"
 interface.radius_visualisation_specification = {
     offset = {0, 1},

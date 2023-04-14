@@ -1,5 +1,12 @@
 local util = require("__core__/lualib/util")
 local spidertron_lib = require("lib.spidertron_lib")
+local lib = require("lib.lib")
+
+-- We add a hack here because we accidentally created a bunch of 
+-- global functions, and I don't want to move it all into the 
+-- right order and lose a bunch of history, so we'll just
+-- put some of them in a lovely table.
+local funcs = { }
 
 local function name_is_dock(name)
     return not (string.match(name, "ss[-]spidertron[-]dock") == nil)
@@ -14,6 +21,7 @@ local function create_dock_data(dock_entity)
         occupied = false,
 
         -- Remember the normal type of the spider docked here
+        -- Note: This value might not be cleaned when the spider undocked
         spider_name = nil,
 
         -- Keep a reference to the docked spider
@@ -102,11 +110,15 @@ local function create_interface_data(interface)
         dock = nil,
 
         -- Cache this entity's circuit network connections for quick
-        -- processing times
+        -- processing times of circuit reading
         circuit_network = {
             red = interface.get_circuit_network(defines.wire_type.red),
             green = interface.get_circuit_network(defines.wire_type.green),
         },
+
+        -- Cache this constant combinator's control behaviour
+        -- for quick setting of signals
+        control_behaviour = interface.get_control_behavior(),
     }
 end
 
@@ -389,6 +401,52 @@ local function dock_from_active_to_serialised(dock)
     return serialised_spider
 end
 
+-- This function accepts a map of {interface_unit_number, interface} to update
+-- It's assumes that all the interfaces are connected to the same dock
+local function update_circuit_output_for_interfaces(interfaces)
+
+    -- Now loop through all the interfaces and update them
+    for interface_unit_number, interface in pairs(interfaces) do
+        local interface_data = global.interfaces[interface_unit_number]
+        interface_data.control_behaviour.enabled = true
+        
+        -- Find the dock data, if there are any. We will still
+        -- clean interfaces not connected to anything. Doing it 
+        -- this way means that if we give this function bad input
+        -- it will give bad output, but that's fine, we never write any bugs.
+        local dock_data = nil
+        if not dock_data and interface_data.dock then
+            dock_data = get_dock_data_from_entity(interface_data.dock)
+        end
+
+        -- Now set the signals if there is dock_data, or clear it otherwise
+        if dock_data and dock_data.occupied then
+            local item_name 
+            if dock_data.mode == "active" then
+                item_name = game.entity_prototypes[dock_data.spider_name].items_to_place_this[1].name
+            else
+                item_name = game.entity_prototypes[dock_data.serialised_spider.name].items_to_place_this[1].name
+            end
+            for interface_unit_number, interface in pairs(dock_data.interfaces) do
+                if interface.valid then
+                    interface_data = global.interfaces[interface_unit_number]
+                    interface_data.control_behaviour.set_signal(1,  
+                            {signal = {type = "item", name = item_name}, count = 1})
+                end
+            end
+        else
+            interface_data.control_behaviour.set_signal(1,  nil)
+        end
+    end
+end
+
+script.on_event(defines.events.on_gui_closed, function(event)
+    local entity = event.entity
+    if entity and entity.valid and entity.name == "sd-spidertron-dock-interface" then
+        update_circuit_output_for_interfaces({[entity.unit_number]=entity})
+    end
+end)
+
 -- This will dock a spider, and not
 -- do any checks.
 local function dock_spider(dock, spider)
@@ -406,6 +464,8 @@ local function dock_spider(dock, spider)
     else
         dock_from_serialised_to_active(dock, serialised_spider)
     end
+
+    update_circuit_output_for_interfaces(dock_data.interfaces)
 end
 
 -- This will undock a spider, and not
@@ -425,12 +485,16 @@ local function undock_spider(dock)
     else
         serialised_spider = dock_from_active_to_serialised(dock)
     end
-    return dock_from_serialised_to_spider(dock, serialised_spider)
+    local spider = dock_from_serialised_to_spider(dock, serialised_spider)
+
+    update_circuit_output_for_interfaces(dock_data.interfaces)
+
+    return spider
 end
 
 -- This function will attempt the dock
 -- of a spider.
-local function attempt_dock(spider)
+function attempt_dock(spider)
     local spider_data = get_spider_data_from_entity(spider)
     if not spider_data.armed_for then return end
 
@@ -467,8 +531,8 @@ local function attempt_dock(spider)
 
     -- Update GUI's for all players
     for _, player in pairs(game.players) do
-        update_spider_gui_for_player(player)
-        update_dock_gui_for_player(player, dock)
+        funcs.update_spider_gui_for_player(player)
+        funcs.update_dock_gui_for_player(player, dock)
     end
 end
 
@@ -515,8 +579,8 @@ local function attempt_undock(dock_data, player, force)
 
     -- Destroy GUI for all players
     for _, player in pairs(game.players) do
-        update_spider_gui_for_player(player, spider)
-        update_dock_gui_for_player(player, dock)
+        funcs.update_spider_gui_for_player(player, spider)
+        funcs.update_dock_gui_for_player(player, dock)
     end
 
     return true
@@ -606,25 +670,32 @@ end
 
 local function interface_built(interface)
     -- Create the data in global
-    global.interfaces[interface.unit_number] = create_interface_data(interface)
+    local unit_number = interface.unit_number
+    global.interfaces[unit_number] = create_interface_data(interface)
+    local interface_data = global.interfaces[unit_number]
 
-    -- Disable rotation so that the dock it's interfacing
-    -- to can't change with a rotate
+    -- Change some properties to make this entity easier to handle
     interface.rotatable = false
-
-    -- Determine if it has connected dock
-    dock = interface_get_connected_dock(interface)
-    if not dock then return end
-    dock.create_build_effect_smoke()    -- Cool connect effect
     
-    -- Setup connections
-    dock_data = get_dock_data_from_entity(dock)
-    dock_data.interfaces[interface.unit_number] = interface
-    global.interfaces[interface.unit_number].dock = dock
+    -- Determine if it has connected dock
+    local dock = interface_get_connected_dock(interface)
+    if dock then        
+        dock.create_build_effect_smoke()    -- Cool connect effect
+        -- TODO Make connection sound
+        
+        -- Setup connections
+        local dock_data = get_dock_data_from_entity(dock)
+        dock_data.interfaces[interface.unit_number] = interface
+        global.interfaces[interface.unit_number].dock = dock
+    end
+
+    -- Ensure the circuit connection is outputting the correct value
+    -- This has to be done after we've determined if it's connected to a dock
+    update_circuit_output_for_interfaces({[unit_number] = interface_data})
 end
 
 local function dock_built(dock)
-    dock_data = get_dock_data_from_entity(dock)
+    local dock_data = get_dock_data_from_entity(dock)
 
     -- Look for interfaces around this dock, and attempt to connect any of them
     for _, interface in pairs (dock.surface.find_entities_filtered{
@@ -639,8 +710,13 @@ local function dock_built(dock)
             global.interfaces[interface.unit_number].dock = dock
             
             interface.create_build_effect_smoke()    -- Cool effect
+            -- TODO Make connection sound
         end
     end
+
+    -- Ensure the circuit connection is outputting the correct value
+    -- This has to be done after we've determined if it's connected to a dock
+    update_circuit_output_for_interfaces(dock_data.interfaces)
 end
 
 local function on_built(event)
@@ -663,6 +739,7 @@ end
 script.on_event(defines.events.on_robot_built_entity, on_built)
 script.on_event(defines.events.on_built_entity, on_built)
 script.on_event(defines.events.script_raised_built, on_built)
+script.on_event(defines.events.script_raised_revive, on_built)
 
 local function on_deconstructed(event)
     -- When the dock is destroyed then attempt undock the spider
@@ -805,7 +882,7 @@ end
 -- Technically this can be called under different circumstances too
 -- but we will assume the spider always need to move to the
 -- new location
-script.on_event(defines.events.on_entity_cloned , function(event)
+script.on_event(defines.events.on_entity_cloned, function(event)
     local source = event.source
     local destination = event.destination
     if source and source.valid and destination and destination.valid then
@@ -858,7 +935,26 @@ script.on_event(defines.events.on_entity_cloned , function(event)
     end
 end)
 
-local function update_spider_gui_for_player(player, spider)
+local function update_dock_circuits(dock_data, dock_unit_number)
+    if not next(dock_data.interfaces) then return end
+    -- TODO (HW)
+
+end
+
+script.on_event(defines.events.on_tick, function (event)
+    -- Iterate over docks to see if there are any interfaces we
+    -- should respond to. We do this per dock, and not per interface,
+    -- so that the interfaces always act as a group, if multiple are
+    -- connected to a dock
+    global._iterate_docks = lib.table.for_n_of(
+        global.docks, 
+        global._iterate_docks, 
+        5,      -- Amount of docks to service per tick
+        update_dock_circuits
+    )
+end)
+
+function funcs.update_spider_gui_for_player(player, spider)
     
     -- Destroy whatever is there currently for
     -- any player. That's so that the player doesn't
@@ -909,7 +1005,7 @@ local function update_spider_gui_for_player(player, spider)
     end
 end
 
-local function update_dock_gui_for_player(player, dock)
+function funcs.update_dock_gui_for_player(player, dock)
     
     -- Destroy whatever is there currently for
     -- any player. That's so that the player doesn't
@@ -965,12 +1061,12 @@ script.on_event(defines.events.on_gui_opened, function(event)
         -- Need to check all versions of specific entity
         -- type. Otherwise it will draw it for those too.
         if entity.type == "spider-vehicle" then
-            update_spider_gui_for_player(
+            funcs.update_spider_gui_for_player(
                 game.get_player(event.player_index),
                 event.entity
             )
         elseif entity.type == "accumulator" then
-            update_dock_gui_for_player(
+            funcs.update_dock_gui_for_player(
                 game.get_player(event.player_index),
                 event.entity
             )
