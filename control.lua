@@ -1140,6 +1140,57 @@ script.on_event(defines.events.on_gui_click, function(event)
     end
 end)
 
+-- All this code does it to show dock/interface connection where hovering
+-- the mouse over either entity, similar to how beacons/machines. It's not
+-- really required, but I think it will look cool.
+script.on_event(defines.events.on_selected_entity_changed , function(event)
+    local player = game.get_player(event.player_index)
+    local player_data = global.players[event.player_index]
+
+    -- Urgh, I don't want handle all players leaving or joining or whatever.
+    -- I'll just hack it in here for now.
+    if not player_data then
+        global.players[event.player_index] = { }
+        player_data = global.players[event.player_index]
+    end
+    
+    -- Always destroy all current selection boxes, if any, to keep logic simple.
+    -- We will have to do it most of the time anyway
+    if player_data.selection_boxes then -- We create it dynamically
+        for _, box in pairs(player_data.selection_boxes) do box.destroy() end
+    end
+    player_data.selection_boxes = { }
+    
+    -- Draw new custom selection if we need to 
+    local entity = player.selected
+    if not entity or not entity.valid then return end
+    if name_is_dock(entity.name) then
+        local dock_data = get_dock_data_from_entity(entity)
+        local surface = entity.surface
+        for interface_unit_number, interface in pairs(dock_data.interfaces) do
+            table.insert(player_data.selection_boxes, surface.create_entity{
+                name = "highlight-box",
+                position = interface.position,
+                source = interface,
+                box_type = "electricity", -- For the light blue box
+                render_player_index = event.player_index,
+            })
+        end
+    elseif entity.name == "sd-spidertron-dock-interface" then        
+        local interface_data = global.interfaces[entity.unit_number]
+        if interface_data.dock then
+            local dock = interface_data.dock
+            table.insert(player_data.selection_boxes, entity.surface.create_entity{
+                name = "highlight-box",
+                position = dock.position,
+                source = dock,
+                box_type = "electricity", -- For the light blue box
+                render_player_index = event.player_index,
+            })
+        end
+    end
+end)
+
 -- It might be that some docks had their docked
 -- spidey removed because mods changed. Clean them up
 local function sanitize_docks()
@@ -1235,6 +1286,7 @@ script.on_init(function()
     global.spiders = {}
     global.spider_whitelist = build_spider_whitelist()
     global.interfaces = {}
+    global.players = {}
     picker_dollies_blacklist_docked_spiders()
     
     -- Add support for picker dollies
@@ -1257,6 +1309,7 @@ script.on_configuration_changed(function (event)
     global.spiders = global.spiders or {}
     global.spider_whitelist = build_spider_whitelist()
     global.interfaces = global.interfaces or {}
+    global.players = global.players or {}
     
     picker_dollies_blacklist_docked_spiders()
     sanitize_docks()
