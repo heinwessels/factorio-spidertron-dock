@@ -2,6 +2,12 @@ local util = require("__core__/lualib/util")
 local spidertron_lib = require("lib.spidertron_lib")
 local lib = require("lib.lib")
 
+local consts = {
+    occupied_signal = {type = "virtual", name="signal-O"},
+    recall_signal = {type = "virtual", name="signal-R"},
+    undock_signal = {type = "virtual", name="signal-U"},
+}
+
 -- We add a hack here because we accidentally created a bunch of 
 -- global functions, and I don't want to move it all into the 
 -- right order and lose a bunch of history, so we'll just
@@ -93,6 +99,11 @@ local function create_spider_data(spider_entity)
         -- spider name that is docked.
         original_spider_name = nil,
 
+
+        -- This will be populated by the dock recalling this spider
+        -- when done through circuit or GUI. It's so that the command
+        -- isn't actively given.
+        recall_target = nil
     }
 end
 
@@ -108,13 +119,6 @@ local function create_interface_data(interface)
 
         -- The dock entity this interface is connected to
         dock = nil,
-
-        -- Cache this entity's circuit network connections for quick
-        -- processing times of circuit reading
-        circuit_network = {
-            red = interface.get_circuit_network(defines.wire_type.red),
-            green = interface.get_circuit_network(defines.wire_type.green),
-        },
 
         -- Cache this constant combinator's control behaviour
         -- for quick setting of signals
@@ -421,17 +425,10 @@ local function update_circuit_output_for_interfaces(interfaces)
 
         -- Now set the signals if there is dock_data, or clear it otherwise
         if dock_data and dock_data.occupied then
-            local item_name 
-            if dock_data.mode == "active" then
-                item_name = game.entity_prototypes[dock_data.spider_name].items_to_place_this[1].name
-            else
-                item_name = game.entity_prototypes[dock_data.serialised_spider.name].items_to_place_this[1].name
-            end
             for interface_unit_number, interface in pairs(dock_data.interfaces) do
                 if interface.valid then
                     interface_data = global.interfaces[interface_unit_number]
-                    interface_data.control_behaviour.set_signal(1,  
-                            {signal = {type = "item", name = item_name}, count = 1})
+                    interface_data.control_behaviour.set_signal(1, {signal=consts.occupied_signal, count=1})
                 end
             end
         else
@@ -528,6 +525,7 @@ function attempt_dock(spider)
 
     -- Dock the spider!
     dock_spider(dock, spider)
+    spider_data.recall_target = nil
 
     -- Update GUI's for all players
     for _, player in pairs(game.players) do
@@ -540,6 +538,7 @@ local function attempt_undock(dock_data, player, force)
     if not dock_data.occupied then return end
     local dock = dock_data.dock_entity
     if not dock then error("dock_data had no associated entity") end
+    if player and (player.force ~= dock.force) then return end
 
     -- Some sanity check. If this happens, then something bad happens.
     -- Just quitly sweep it under the rug
@@ -572,7 +571,7 @@ local function attempt_undock(dock_data, player, force)
     -- Undock the spider!
     local spider = undock_spider(dock)
 
-    -- close the gui since player likely just wanted to undock he spider
+    -- close the gui since player likely just wanted to undock the spider
     if player then
         player.opened = nil
     end
@@ -582,6 +581,8 @@ local function attempt_undock(dock_data, player, force)
         funcs.update_spider_gui_for_player(player, spider)
         funcs.update_dock_gui_for_player(player, dock)
     end
+
+    dock_data.last_docked_spider = spider
 
     return true
 end
@@ -601,6 +602,7 @@ script.on_event(defines.events.on_player_used_spider_remote,
         local spider = event.vehicle
         if spider and spider.valid then
             local spider_data = get_spider_data_from_entity(spider)
+            spider_data.recall_target = nil -- Remotes always overwrite recall commands
 
             -- First check if this is a docked spider. If it is, then
             -- will attempt an undock.
@@ -609,7 +611,7 @@ script.on_event(defines.events.on_player_used_spider_remote,
                 if not dock or not dock.valid then return end
                 local dock_data = get_dock_data_from_entity(dock)
                 local player = game.get_player(event.player_index)
-                if not attempt_undock(dock_data, player, player.force) and spider.valid then
+                if not attempt_undock(dock_data, player) and spider.valid then
                     -- This was not a successfull undock event. Prevent
                     -- the remote from moving the still-docked spider!
                     spider.follow_target = nil
@@ -661,7 +663,7 @@ local function interface_get_connected_dock(interface)
     search_position.y = search_position.y + search_offset[2]
 
     for _, found_entity in pairs(interface.surface.find_entities_filtered{
-        position = search_position,
+        position = search_position, force = interface.force,
         name = {"ss-spidertron-dock-active", "ss-spidertron-dock-passive"}
     }) do
         return found_entity
@@ -937,8 +939,50 @@ end)
 
 local function update_dock_circuits(dock_data, dock_unit_number)
     if not next(dock_data.interfaces) then return end
-    -- TODO (HW)
+    local recall_requested = false
+    local undock_requested = false
+    for interface_unit_number, interface in pairs(dock_data.interfaces) do
 
+        -- We can' cache the wire connections (easily) because thy only exist when connected
+        -- to an existing network. And there are  no events for circuit connections changing.
+        -- So just read it every time
+
+        for _, wire_colour in pairs({defines.wire_type.red, defines.wire_type.green}) do
+            local network = interface.get_circuit_network(wire_colour)
+            if network then
+                if network.get_signal(consts.recall_signal) > 0 then
+                    recall_requested = true
+                end
+                if network.get_signal(consts.undock_signal) > 0 then
+                    undock_requested = true
+                end
+            end
+        end
+    end
+
+    -- Only react if only one signal is present, not both.
+    if recall_requested ~= undock_requested then
+        if undock_requested then attempt_undock(dock_data) end
+        
+        if recall_requested and not dock_data.occupied then
+            -- We will only recall the spider to the dock if it's
+            -- not already on it's way to this dock
+            local dock = dock_data.dock_entity
+            if not dock.valid then return end
+            local spider = dock_data.last_docked_spider
+            if not spider or not spider.valid then
+                dock_data.last_docked_spider = nil
+                return
+            end 
+            local spider_data = get_spider_data_from_entity(spider)
+            if spider_data.recall_target == dock then return end
+            if spider and spider.valid and spider.surface == dock.surface then
+                spider.add_autopilot_destination(dock.position)
+                spider_data.armed_for = dock
+                spider_data.recall_target = dock
+            end
+        end
+    end
 end
 
 script.on_event(defines.events.on_tick, function (event)
