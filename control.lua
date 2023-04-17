@@ -6,6 +6,7 @@ local consts = {
     occupied_signal = {type = "virtual", name="signal-O"},
     recall_signal = {type = "virtual", name="signal-R"},
     undock_signal = {type = "virtual", name="signal-U"},
+    dock_circuit_hysteresis = 120, -- In ticks
 }
 
 -- We add a hack here because we accidentally created a bunch of 
@@ -64,7 +65,11 @@ local function create_dock_data(dock_entity)
 
         -- Map of interfaces referenced by their unit numbers, linked to
         -- the interface entity. A dock can have multiple interfaces.
-        interfaces = { }
+        interfaces = { },
+
+        -- Store the next tick that this dock is allowed to do circuit any operation
+        -- This is to prevent a rapid dock/undock cycle when both signals are applied
+        circuit_hysteresis = nil,
     }
 end
 
@@ -939,22 +944,25 @@ end)
 
 local function update_dock_circuits(dock_data, dock_unit_number)
     if not next(dock_data.interfaces) then return end
+    local tick = game.tick
+    if dock_data.circuit_hysteresis and tick < dock_data.circuit_hysteresis then return end
+    
     local recall_requested = false
     local undock_requested = false
+
     for interface_unit_number, interface in pairs(dock_data.interfaces) do
 
-        -- We can' cache the wire connections (easily) because thy only exist when connected
+        -- We can't cache the wire connections (easily) because thy only exist when connected
         -- to an existing network. And there are  no events for circuit connections changing.
         -- So just read it every time
 
         for _, wire_colour in pairs({defines.wire_type.red, defines.wire_type.green}) do
             local network = interface.get_circuit_network(wire_colour)
             if network then
-                if network.get_signal(consts.recall_signal) > 0 then
-                    recall_requested = true
-                end
-                if network.get_signal(consts.undock_signal) > 0 then
+                if dock_data.occupied and network.get_signal(consts.undock_signal) > 0 then
                     undock_requested = true
+                elseif network.get_signal(consts.recall_signal) > 0 then
+                    recall_requested = true
                 end
             end
         end
@@ -962,7 +970,11 @@ local function update_dock_circuits(dock_data, dock_unit_number)
 
     -- Only react if only one signal is present, not both.
     if recall_requested ~= undock_requested then
-        if undock_requested then attempt_undock(dock_data) end
+        if undock_requested then 
+            attempt_undock(dock_data)
+
+            dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
+        end
         
         if recall_requested and not dock_data.occupied then
             -- We will only recall the spider to the dock if it's
@@ -981,11 +993,13 @@ local function update_dock_circuits(dock_data, dock_unit_number)
                 spider_data.armed_for = dock
                 spider_data.recall_target = dock
             end
+
+            dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
         end
     end
 end
 
-script.on_event(defines.events.on_tick, function (event)
+script.on_nth_tick(10, function (event)
     -- Iterate over docks to see if there are any interfaces we
     -- should respond to. We do this per dock, and not per interface,
     -- so that the interfaces always act as a group, if multiple are
@@ -993,7 +1007,7 @@ script.on_event(defines.events.on_tick, function (event)
     global._iterate_docks = lib.table.for_n_of(
         global.docks, 
         global._iterate_docks, 
-        5,      -- Amount of docks to service per tick
+        3,      -- Amount of docks to service per tick
         update_dock_circuits
     )
 end)
