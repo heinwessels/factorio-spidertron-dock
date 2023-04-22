@@ -126,8 +126,12 @@ local function create_interface_data(interface)
         dock = nil,
 
         -- Cache this constant combinator's control behaviour
-        -- for quick setting of signals
+        -- for quick setting of signals.
         control_behaviour = interface.get_control_behavior(),
+
+        -- Cache of the circuit network. The validity of this
+        -- cached data needs to be verified before it's used
+        circuit_network = { red = nil, green = nil }
     }
 end
 
@@ -942,6 +946,26 @@ script.on_event(defines.events.on_entity_cloned, function(event)
     end
 end)
 
+local function dock_recall_last_spider(dock)
+    -- We will only recall the spider to the dock if it's
+    -- not already on it's way to this dock
+    local dock_data = get_dock_data_from_entity(dock)
+    local spider = dock_data.last_docked_spider
+    if not spider or not spider.valid then
+        dock_data.last_docked_spider = nil
+        return
+    end 
+    local spider_data = get_spider_data_from_entity(spider)
+    if spider_data.recall_target == dock then return end
+    if spider and spider.valid and spider.surface == dock.surface then
+        -- TODO Clear all current waypoints?
+        spider.add_autopilot_destination(dock.position)
+        spider_data.armed_for = dock
+        spider_data.recall_target = dock
+    end
+end
+
+local wire_colours = {red = defines.wire_type.red, green = defines.wire_type.green}
 local function update_dock_circuits(dock_data, dock_unit_number)
     if not next(dock_data.interfaces) then return end
     local tick = game.tick
@@ -951,50 +975,36 @@ local function update_dock_circuits(dock_data, dock_unit_number)
     local undock_requested = false
 
     for interface_unit_number, interface in pairs(dock_data.interfaces) do
+        local interface_data = global.interfaces[interface_unit_number]
+        for wire_colour, wire_colour_define in pairs(wire_colours) do
+            local network = interface_data.circuit_network[wire_colour]
+            
+            -- This code checks if there is a circuit connection cached. If there are, then
+            -- ensure it's still valid (connected), and if not then get the new state. Or
+            -- if there's nothing cached then we will also check if there is something connected
+            -- now. This is faster than calling get_circuit_network everytime we need to update
+            if not network or not network.valid then
+                interface_data.circuit_network[wire_colour] = interface.get_circuit_network(wire_colour_define)
+                network = interface_data.circuit_network[wire_colour]
+            end
 
-        -- We can't cache the wire connections (easily) because thy only exist when connected
-        -- to an existing network. And there are  no events for circuit connections changing.
-        -- So just read it every time
-
-        for _, wire_colour in pairs({defines.wire_type.red, defines.wire_type.green}) do
-            local network = interface.get_circuit_network(wire_colour)
+            -- network will contain a valid circuit network or be nil
             if network then
+                -- Only see if there is a dock signal if dock is currently occupied
                 if dock_data.occupied and network.get_signal(consts.undock_signal) > 0 then
-                    undock_requested = true
-                elseif network.get_signal(consts.recall_signal) > 0 then
-                    recall_requested = true
+                    attempt_undock(dock_data)
+                    dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
+                
+                    -- Only check if there is a recal signal if there is a spider to recal
+                elseif dock_data.last_docked_spider 
+                        and dock_data.last_docked_spider.valid 
+                        and network.get_signal(consts.recall_signal) > 0 then
+                    local dock = dock_data.dock_entity
+                    if not dock or not dock.valid then return end
+                    dock_recall_last_spider(dock)
+                    dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
                 end
             end
-        end
-    end
-
-    -- Only react if only one signal is present, not both.
-    if recall_requested ~= undock_requested then
-        if undock_requested then 
-            attempt_undock(dock_data)
-
-            dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
-        end
-        
-        if recall_requested and not dock_data.occupied then
-            -- We will only recall the spider to the dock if it's
-            -- not already on it's way to this dock
-            local dock = dock_data.dock_entity
-            if not dock.valid then return end
-            local spider = dock_data.last_docked_spider
-            if not spider or not spider.valid then
-                dock_data.last_docked_spider = nil
-                return
-            end 
-            local spider_data = get_spider_data_from_entity(spider)
-            if spider_data.recall_target == dock then return end
-            if spider and spider.valid and spider.surface == dock.surface then
-                spider.add_autopilot_destination(dock.position)
-                spider_data.armed_for = dock
-                spider_data.recall_target = dock
-            end
-
-            dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
         end
     end
 end
