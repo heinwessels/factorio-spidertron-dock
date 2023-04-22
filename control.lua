@@ -9,6 +9,9 @@ local consts = {
     dock_circuit_hysteresis = 120, -- In ticks
 }
 
+-- Convenience method for when SE is active
+local se_active = script.active_mods["space-exploration"] ~= nil
+
 -- We add a hack here because we accidentally created a bunch of 
 -- global functions, and I don't want to move it all into the 
 -- right order and lose a bunch of history, so we'll just
@@ -103,7 +106,6 @@ local function create_spider_data(spider_entity)
         -- the docked variant. It contains the actual
         -- spider name that is docked.
         original_spider_name = nil,
-
 
         -- This will be populated by the dock recalling this spider
         -- when done through circuit or GUI. It's so that the command
@@ -702,6 +704,11 @@ local function interface_get_connected_dock(interface)
 end
 
 local function interface_built(interface)
+    -- HACK: It might be that this interface is already initialized, 
+    -- and if it is then we assume it's initialized correctly. This
+    -- should only happen with SE spaceship launches
+    if se_active and global.interfaces[unit_number] then return end
+
     -- Create the data in global
     local unit_number = interface.unit_number
     global.interfaces[unit_number] = create_interface_data(interface)
@@ -732,10 +739,18 @@ local function dock_built(dock)
         if dock == interface_get_connected_dock(interface) then
             -- This interface is pointing towards this dock
             -- Setup the corresponding connections
-            dock_connect_to_interface(dock, interface)
-            
-            interface.create_build_effect_smoke()
-            -- TODO Make connection sound
+            if not global.interfaces[interface.unit_number] and se_active then
+                -- HACK: For when SE spaceship cloning occurs. This
+                -- function might be called before the interface
+                -- data is created. Therefore, swop it to the interface
+                -- is built. This will find the dock and do the connection anyway.
+                interface_built(interface)
+            else
+                -- The happy flow of this function
+                dock_connect_to_interface(dock, interface)
+                interface.create_build_effect_smoke()
+                -- TODO Make connection sound
+            end
         end
     end
 end
@@ -954,61 +969,60 @@ local function picker_dollies_move_event(event)
     end
 end
 
--- This function is called when the spaceship changes
--- surfaces.
--- Technically this can be called under different circumstances too
--- but we will assume the spider always need to move to the
--- new location
+-- This function is called in SE when the spaceship changes surfaces.
+-- Technically it can be called in other scenario's too, but we won't
+-- care about that until someone complains, because nobody else uses clone.
+-- 
+-- This event will only be called by SE on the docks and interfaces, not on
+-- the docked-spider-entity, because spiders are teleported. So we also assume
+-- that the teleportion is always successful, and we won't double check.
+-- The new dock entity will be created as usual, and the spider data will
+-- be moved to the new entities.
 script.on_event(defines.events.on_entity_cloned, function(event)
     local source = event.source
     local destination = event.destination
-    if source and source.valid and destination and destination.valid then
-        if name_is_dock(source.name) then
-            local source_dock_data = get_dock_data_from_entity(source)
-            if source_dock_data.occupied then
-                local destination_dock_data = get_dock_data_from_entity(destination)
+    local name = destination.name
+    if not source or not source.valid then return end
+    if not destination or not destination.valid then return end    
 
-                -- First transfer all saved data. And then remove what we don't need
-                -- Doing this funky transfer to also include whatever new fields we might add
-                local key_blacklist = {
-                    ["dock_entity"]=true, 
-                    ["unit_number"]=true, 
-                    ["dock_unit_number"]=true}
-                for key, value in pairs(source_dock_data) do
-                    if not key_blacklist[key] then
-                        destination_dock_data[key] = value
-                    end
-                end
-                
-                if source_dock_data.mode == "active" then
-                    local docked_spider = source_dock_data.docked_spider
-                    local spider_data = get_spider_data_from_entity(docked_spider)
-                    spider_data.armed_for = destination 
-
-                    -- Move spider entity
-                    docked_spider.teleport({
-                        destination.position.x,
-                        destination.position.y + 0.01 -- To draw spidertron over dock entity
-                    }, destination.surface)
-
-                else
-                    -- 'passive' mode
-                    pop_dock_sprites(source_dock_data)
-                    draw_docked_spider(
-                        destination,
-                        destination_dock_data.spider_name,
-                        destination_dock_data.serialised_spider.color
-                    )
-                end
-
-                -- Remove the old dock data entry
-                global.docks[source.unit_number] = nil -- Reset old dock
-            end
-        elseif name_is_docked_spider(source.name) then
-            -- Destroy cloned docked spiders. We just move the old one
-            -- The data will be destroyed with the dock transfer
-            destination.destroy{raise_destroy=false}
+    if name_is_dock(name) then
+        local source_dock_data = get_dock_data_from_entity(source)
+        local destination_dock_data = get_dock_data_from_entity(destination)
+        
+        -- Move data from source dock to new dock
+        local keys_to_copy = { -- Which keys to copy from source dock data
+            "occupied",
+            "spider_name",
+            "docked_spider",
+            "serialised_spider",    -- Will be non-nil when passively docked
+            "last_docked_spider",
+            "circuit_hysteresis",
+        }
+        for _, key in pairs(keys_to_copy) do
+            destination_dock_data[key] = util.table.deepcopy(source_dock_data[key])
         end
+        source_dock_data.occupied = false        
+        source_dock_data.spider_name = nil
+        source_dock_data.docked_spider = nil
+        source_dock_data.serialised_spider = nil
+        source_dock_data.last_docked_spider = nil
+        
+        if destination_dock_data.occupied and destination_dock_data.mode == "passive" then
+            -- pop the sprites from the source and add to destination
+            pop_dock_sprites(source_dock_data)
+            draw_docked_spider(
+                destination,
+                destination_dock_data.spider_name,
+                destination_dock_data.serialised_spider.color
+            )
+        end
+
+        -- Do this last, because it will handle the interface connection
+        dock_built(destination) -- Will auto-connect to interfaces if available
+
+        -- The old dock entity will be removed by a destroy event by SE
+    elseif name == "sd-spidertron-dock-interface" then
+        interface_built(destination) -- Will auto-connect to dock if available
     end
 end)
 
