@@ -1,5 +1,7 @@
 
-# [Space Spidertron](https://mods.factorio.com/mod/space-spidertron)
+# [Spidertron DOck](https://mods.factorio.com/mod/spidertron-dock)
+
+[![shield](https://img.shields.io/badge/dynamic/json?color=orange&label=Factorio&query=downloads_count&suffix=%20downloads&url=https%3A%2F%2Fmods.factorio.com%2Fapi%2Fmods%2Fspidertron-dock)](https://mods.factorio.com/mod/spidertron-dock)
 
 ![](https://raw.githubusercontent.com/heinwessels/factorio-space-spidertron/main/mod-page/infographic.png)
 

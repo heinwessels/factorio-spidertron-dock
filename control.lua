@@ -652,6 +652,28 @@ script.on_event(defines.events.on_player_used_spider_remote,
     end
 )
 
+local function dock_connect_to_interface(dock, interface)
+    -- Do the connection
+    local dock_data = global.docks[dock.unit_number]
+    local interface_unit_number = interface.unit_number
+    dock_data.interfaces[interface_unit_number] = interface
+    global.interfaces[interface_unit_number].dock = dock
+    
+    -- Ensure the circuit connection is outputting the correct value
+    update_circuit_output_for_interfaces({[interface_unit_number] = interface})
+end
+
+local function dock_disconnect_from_interface(dock, interface)
+    -- Do the connection
+    local dock_data = global.docks[dock.unit_number]
+    local interface_unit_number = interface.unit_number
+    dock_data.interfaces[interface_unit_number] = nil
+    global.interfaces[interface_unit_number].dock = nil
+    
+    -- Ensure the circuit connection is outputting the correct value
+    update_circuit_output_for_interfaces({[interface_unit_number] = interface})
+end
+
 local function interface_get_connected_dock(interface)
     -- Gets the connected dock by looking at the location
     -- and not the interface's data. This is heavily based
@@ -694,15 +716,8 @@ local function interface_built(interface)
         dock.create_build_effect_smoke()    -- Cool connect effect
         -- TODO Make connection sound
         
-        -- Setup connections
-        local dock_data = get_dock_data_from_entity(dock)
-        dock_data.interfaces[interface.unit_number] = interface
-        global.interfaces[interface.unit_number].dock = dock
+        dock_connect_to_interface(dock, interface)
     end
-
-    -- Ensure the circuit connection is outputting the correct value
-    -- This has to be done after we've determined if it's connected to a dock
-    update_circuit_output_for_interfaces({[unit_number] = interface_data})
 end
 
 local function dock_built(dock)
@@ -717,17 +732,12 @@ local function dock_built(dock)
         if dock == interface_get_connected_dock(interface) then
             -- This interface is pointing towards this dock
             -- Setup the corresponding connections
-            dock_data.interfaces[interface.unit_number] = interface
-            global.interfaces[interface.unit_number].dock = dock
+            dock_connect_to_interface(dock, interface)
             
-            interface.create_build_effect_smoke()    -- Cool effect
+            interface.create_build_effect_smoke()
             -- TODO Make connection sound
         end
     end
-
-    -- Ensure the circuit connection is outputting the correct value
-    -- This has to be done after we've determined if it's connected to a dock
-    update_circuit_output_for_interfaces(dock_data.interfaces)
 end
 
 local function on_built(event)
@@ -874,17 +884,73 @@ end)
 -- moving the spiders though 
 local function picker_dollies_move_event(event)
     local entity = event.moved_entity
-    if entity.name == "ss-spidertron-dock-active" then
-        local dock_data = get_dock_data_from_entity(entity)
-        if dock_data.occupied then
-            dock_data.docked_spider.teleport({
-                entity.position.x,
-                entity.position.y + 0.01 -- To draw spidertron over dock entity
-            }, entity.surface)
+    if name_is_dock(entity.name) then
+        local dock = entity
+        local dock_data = get_dock_data_from_entity(dock)
+        -- Handle the docked spider entity
+        if dock.name == "ss-spidertron-dock-active" then
+            if dock_data.occupied then
+                dock_data.docked_spider.teleport({
+                    dock.position.x,
+                    dock.position.y + 0.01 -- To draw spidertron over dock entity
+                }, dock.surface)
+            end
+            -- When it's a passive dock we don't need to shift
+            -- the sprites because they are attached to the dock
         end
-    elseif entity.name == "ss-spidertron-dock-passive" then
-        -- This event should handle itself, because the
-        -- sprites are attached to the dock
+
+        -- Handle the possibility of new interface connections
+        local something_changed = false
+        -- First we loop over all current interfaces and ensure they are all still connected
+        for interface_unit_number, interface in pairs(dock_data.interfaces) do
+            if interface_get_connected_dock(interface) ~= dock then
+                -- This connection no longer exists
+                something_changed = true
+                interface.create_build_effect_smoke()
+                dock_disconnect_from_interface(dock, interface)
+            end
+        end
+        
+        -- Look for interfaces around this dock, and attempt to connect any of them
+        for _, interface in pairs (dock.surface.find_entities_filtered{
+            name = "sd-spidertron-dock-interface", 
+            radius = dock.get_radius() + 1, 
+            position = dock.position
+        }) do
+            -- Check if this interface is connected to the dock, but ignore it
+            -- if it the connection already existed
+            if not dock_data.interfaces[interface.unit_number] and
+                    interface_get_connected_dock(interface) == dock then
+                something_changed = true
+                dock_connect_to_interface(dock, interface)
+                interface.create_build_effect_smoke()
+            end
+        end
+
+        if something_changed then
+            -- Just a little trick to only create dock smoke once
+            dock.create_build_effect_smoke()
+        end
+    elseif entity.name == "sd-spidertron-dock-interface" then
+        local interface = entity
+        local interface_data = global.interfaces[interface.unit_number]
+        local previous_dock = interface_data.dock
+        local new_dock = interface_get_connected_dock(interface)
+
+        -- Only need to update anything in this case when the connection
+        -- is not the same anymore. Then we disconnect from the previous dock
+        -- and connect to the new one
+        if previous_dock ~= new_dock then
+            interface.create_build_effect_smoke()
+            if previous_dock and previous_dock.valid then
+                previous_dock.create_build_effect_smoke()
+                dock_disconnect_from_interface(previous_dock, interface)
+            end
+            if new_dock then
+                new_dock.create_build_effect_smoke()
+                dock_connect_to_interface(new_dock, interface)
+            end
+        end
     end
 end
 
@@ -1046,6 +1112,7 @@ function funcs.update_spider_gui_for_player(player, spider)
     -- if the player is currently looking at this docked spider
     if player.opened 
             and (player.opened == spider) 
+            and spider_data.armed_for
             and spider_data.armed_for.valid then
         -- Build a new gui!
 
