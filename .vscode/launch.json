@@ -15,6 +15,7 @@
             "type": "factoriomod",
             "request": "launch",
             "name": "Factorio Mod Debug (Profile)",
+            "hookControl": ["spidertron-dock"],
             "hookMode": "profile"
         }
     ]

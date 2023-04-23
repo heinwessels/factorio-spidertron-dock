@@ -10,7 +10,7 @@ data:extend({
         filename = "__base__/sound/cargo-wagon-close.ogg",
     },
     {
-        name = "ss-spidertron-undock-1",
+        name = "sd-spidertron-undock-wire",
         type = "sound",
         filename = "__core__/sound/wire-disconnect.ogg",
     },

@@ -483,7 +483,7 @@ local function undock_spider(dock)
 
     -- Some smoke and mirrors
     dock.create_build_effect_smoke()
-    dock.surface.play_sound{path="ss-spidertron-undock-1", position=dock.position}
+    dock.surface.play_sound{path="sd-spidertron-undock-wire", position=dock.position}
     dock.surface.play_sound{path="ss-spidertron-undock-2", position=dock.position}
 
     -- Undocking procedure
@@ -703,7 +703,7 @@ local function interface_get_connected_dock(interface)
     end
 end
 
-local function interface_built(interface)
+local function interface_built(interface, mute)
     -- HACK: It might be that this interface is already initialized, 
     -- and if it is then we assume it's initialized correctly. This
     -- should only happen with SE spaceship launches
@@ -719,15 +719,17 @@ local function interface_built(interface)
     
     -- Determine if it has connected dock
     local dock = interface_get_connected_dock(interface)
-    if dock then        
-        dock.create_build_effect_smoke()    -- Cool connect effect
-        -- TODO Make connection sound
+    if dock then
+        if not mute then
+            dock.create_build_effect_smoke()
+            interface.surface.play_sound{path="sd-spidertron-undock-wire", position=dock.position}
+        end
         
         dock_connect_to_interface(dock, interface)
     end
 end
 
-local function dock_built(dock)
+local function dock_built(dock, mute)
     local dock_data = get_dock_data_from_entity(dock)
 
     -- Look for interfaces around this dock, and attempt to connect any of them
@@ -744,12 +746,14 @@ local function dock_built(dock)
                 -- function might be called before the interface
                 -- data is created. Therefore, swop it to the interface
                 -- is built. This will find the dock and do the connection anyway.
-                interface_built(interface)
+                interface_built(interface, mute)
             else
                 -- The happy flow of this function
-                dock_connect_to_interface(dock, interface)
-                interface.create_build_effect_smoke()
-                -- TODO Make connection sound
+                if not mute then
+                    dock_connect_to_interface(dock, interface)
+                    interface.create_build_effect_smoke()
+                end
+                dock.surface.play_sound{path="sd-spidertron-undock-wire", position=dock.position}
             end
         end
     end
@@ -1018,11 +1022,11 @@ script.on_event(defines.events.on_entity_cloned, function(event)
         end
 
         -- Do this last, because it will handle the interface connection
-        dock_built(destination) -- Will auto-connect to interfaces if available
+        dock_built(destination, true) -- Will auto-connect to interfaces if available
 
         -- The old dock entity will be removed by a destroy event by SE
     elseif name == "sd-spidertron-dock-interface" then
-        interface_built(destination) -- Will auto-connect to dock if available
+        interface_built(destination, true) -- Will auto-connect to dock if available
     end
 end)
 
@@ -1038,7 +1042,7 @@ local function dock_recall_last_spider(dock)
     local spider_data = get_spider_data_from_entity(spider)
     if spider_data.recall_target == dock then return end
     if spider and spider.valid and spider.surface == dock.surface then
-        -- TODO Clear all current waypoints?
+        spider.autopilot_destination = nil -- Clear current waypoints
         spider.add_autopilot_destination(dock.position)
         spider_data.armed_for = dock
         spider_data.recall_target = dock
@@ -1048,11 +1052,11 @@ end
 local wire_colours = {red = defines.wire_type.red, green = defines.wire_type.green}
 local function update_dock_circuits(dock_data, dock_unit_number)
     if not next(dock_data.interfaces) then return end
-    local tick = game.tick
-    if dock_data.circuit_hysteresis and tick < dock_data.circuit_hysteresis then return end
     
-    local recall_requested = false
-    local undock_requested = false
+    -- Ensure we don't check this network too often
+    local tick = game.tick    
+    if dock_data.circuit_hysteresis and tick < dock_data.circuit_hysteresis then return end
+    dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
 
     for interface_unit_number, interface in pairs(dock_data.interfaces) do
         local interface_data = global.interfaces[interface_unit_number]
@@ -1073,16 +1077,18 @@ local function update_dock_circuits(dock_data, dock_unit_number)
                 -- Only see if there is a dock signal if dock is currently occupied
                 if dock_data.occupied and network.get_signal(consts.undock_signal) > 0 then
                     attempt_undock(dock_data)
-                    dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
-                
-                    -- Only check if there is a recal signal if there is a spider to recal
+                    return -- When we do an action we don't have to check for other actions
+
+                -- Only check if there is a recal signal if there is a spider to recal
                 elseif dock_data.last_docked_spider 
                         and dock_data.last_docked_spider.valid 
                         and network.get_signal(consts.recall_signal) > 0 then
                     local dock = dock_data.dock_entity
                     if not dock or not dock.valid then return end
                     dock_recall_last_spider(dock)
-                    dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
+                    -- This will periodically still re-issue the recall command. That's fine,
+                    -- because this will probably not happen often anyway.
+                    return -- When we do an action we don't have to check for other actions
                 end
             end
         end
