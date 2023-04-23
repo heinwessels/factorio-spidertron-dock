@@ -1,11 +1,12 @@
 {
 	"name": "spidertron-dock",
-	"version": "0.1.0",
+	"version": "1.0.0",
 	"title": "Spidertron Dock",
 	"author": "stringweasel",	
 	"factorio_version": "1.1",
 	"dependencies": [
 		"base >= 1.1.70",
+		"~ space-spidertron",
 		"? space-exploration",
 		"(?) Krastorio2"
 	],

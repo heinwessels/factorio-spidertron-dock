@@ -3,3 +3,5 @@ Version: 1.0.0
 Date: ??.??.2023
   Features:
     - Space Spidertron is now a standalone mod, split of from Space Spidertron.
+  Changes:
+    - Docking mode is only changed with the R-button when the player's cursor is empty.

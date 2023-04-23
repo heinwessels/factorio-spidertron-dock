@@ -656,7 +656,7 @@ script.on_event(defines.events.on_player_used_spider_remote,
 
 local function dock_connect_to_interface(dock, interface)
     -- Do the connection
-    local dock_data = global.docks[dock.unit_number]
+    local dock_data = get_dock_data_from_entity(dock)
     local interface_unit_number = interface.unit_number
     dock_data.interfaces[interface_unit_number] = interface
     global.interfaces[interface_unit_number].dock = dock
@@ -667,7 +667,7 @@ end
 
 local function dock_disconnect_from_interface(dock, interface)
     -- Do the connection
-    local dock_data = global.docks[dock.unit_number]
+    local dock_data = get_dock_data_from_entity(dock)
     local interface_unit_number = interface.unit_number
     dock_data.interfaces[interface_unit_number] = nil
     global.interfaces[interface_unit_number].dock = nil
@@ -833,6 +833,10 @@ script.on_event("ss-spidertron-dock-toggle", function(event)
     if not dock or not dock.valid then return end
     if dock.force ~= player.force then return end
     if not name_is_dock(dock.name) then return end
+
+    -- If the player has something in the cursor, then we don't change
+    -- the dock type, because it's too easy to do it while building something.
+    if player.cursor_stack.valid_for_read then return end
     
     -- By this point we know that this is a dock the player can toggle
     -- We need to be careful with the data
@@ -1446,3 +1450,27 @@ script.on_configuration_changed(function (event)
         end
     end
 end)
+
+-- The dock functionality is split of from the space-spidertron mod. We will 
+-- create a remote function that the space-spidertron mod can use to transfer
+-- the global data to this mod.
+remote.add_interface("spidertron-dock", {
+    migrate_data = function (data)
+        -- data is basically a copy of space-spidertron's global. It's slightly outdated,
+        -- so we need to add some missing fields. And then we need to add it all to our
+        -- current global. Not sure if it would exist already, we'll see.
+        -- We also update some global variables, because we added some fields.
+        
+        for dock_unit_number, dock_data in pairs(data.docks) do
+            dock_data.interfaces = { }
+            if dock_data.dock_entity and dock_data.dock_entity.valid then
+                dock_data.position = dock_data.dock_entity.position
+                global.docks[dock_unit_number] = util.table.deepcopy(dock_data)
+            end
+        end
+        
+        for spider_unit_number, spider_data in pairs(data.spiders) do
+            global.spiders[spider_unit_number] = util.table.deepcopy(spider_data)
+        end
+    end,
+})
