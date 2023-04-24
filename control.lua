@@ -137,30 +137,6 @@ local function create_interface_data(interface)
     }
 end
 
-local function get_dock_data_from_entity(dock)
-    if not name_is_dock(dock.name) then return end
-    local dock_data = global.docks[dock.unit_number]
-    if not dock_data then
-        global.docks[dock.unit_number] = create_dock_data(dock)
-        dock_data = global.docks[dock.unit_number]
-    end
-    return dock_data
-end
-
-local function get_spider_data_from_unit_number(spider_unit_number)
-    return global.spiders[spider_unit_number]
-end
-
-local function get_spider_data_from_entity(spider)
-    if not spider.type == "spider-vehicle" then return end
-    local spider_data = global.spiders[spider.unit_number]
-    if not spider_data then
-        global.spiders[spider.unit_number] = create_spider_data(spider)
-        spider_data = global.spiders[spider.unit_number]
-    end
-    return spider_data
-end
-
 -- An function to call when an dock action
 -- was not allowed. It will play the "no-no"
 -- sound and create some flying text
@@ -266,7 +242,7 @@ local function dock_does_not_support_spider(dock, spider)
 end
 
 local function draw_docked_spider(dock, spider_name, color)
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
     dock_data.docked_sprites = dock_data.docked_sprites or {}
 
     -- Offset to place sprite at correct location
@@ -333,8 +309,7 @@ end
 -- A regular spider turns into a serialised version ready
 -- for docking. This will remove the spider entity and is
 -- the first step of the actual docking procedure
-local function dock_from_spider_to_serialised(dock, spider)
-    local dock_data = get_dock_data_from_entity(dock)
+local function dock_from_spider_to_serialised(dock, dock_data, spider)
     dock_data.spider_name = spider.name
     local serialised_spider = spidertron_lib.serialise_spidertron(spider)    
     spider.destroy{raise_destroy=true}  -- This will clean the spider data in the destroy event
@@ -344,8 +319,7 @@ end
 
 -- A serialised spider turns back into the regular spider
 -- This is the last step of the actual undocking procedure
-local function dock_from_serialised_to_spider(dock, serialised_spider)
-    local dock_data = get_dock_data_from_entity(dock)
+local function dock_from_serialised_to_spider(dock, dock_data, serialised_spider)
     local spider = dock.surface.create_entity{
         name = dock_data.spider_name,
         position = dock.position,
@@ -355,7 +329,7 @@ local function dock_from_serialised_to_spider(dock, serialised_spider)
     }
     spidertron_lib.deserialise_spidertron(spider, serialised_spider)
     spider.torso_orientation = 0.58 -- orientation of sprite
-    local spider_data = get_spider_data_from_entity(spider)
+    local spider_data = global.spiders[spider.unit_number]
     spider_data.last_used_dock = dock
     dock_data.occupied = false
     return spider
@@ -364,16 +338,14 @@ end
 -- Dock a spider passively to a dock. This means that
 -- spider-sprites are drawn and the serialization info 
 -- is stored in the dock
-local function dock_from_serialised_to_passive(dock, serialised_spider)
-    local dock_data = get_dock_data_from_entity(dock)
+local function dock_from_serialised_to_passive(dock, dock_data, serialised_spider)
     dock_data.serialised_spider = serialised_spider
     draw_docked_spider(dock, dock_data.spider_name, serialised_spider.color)
 end
 
 -- Returns the serialised version of a passively docked spider
 -- this will also pop the sprites
-local function dock_from_passive_to_serialised(dock)
-    local dock_data = get_dock_data_from_entity(dock)
+local function dock_from_passive_to_serialised(dock, dock_data)
     pop_dock_sprites(dock_data)
     local serialised_spider = dock_data.serialised_spider
     dock_data.serialised_spider = nil
@@ -382,8 +354,7 @@ end
 
 -- Dock a spider actively to a dock. This means a docked-version
 -- of the spider is placed on the dock
-local function dock_from_serialised_to_active(dock, serialised_spider)
-    local dock_data = get_dock_data_from_entity(dock)
+local function dock_from_serialised_to_active(dock, dock_data, serialised_spider)
     local docked_spider = dock.surface.create_entity{
         name = "ss-docked-"..dock_data.spider_name,
         position = {
@@ -397,7 +368,8 @@ local function dock_from_serialised_to_active(dock, serialised_spider)
     docked_spider.destructible = false -- Only dock can be attacked
     spidertron_lib.deserialise_spidertron(docked_spider, serialised_spider)
     docked_spider.torso_orientation = 0.58 -- Looks nice
-    local docked_spider_data = get_spider_data_from_entity(docked_spider)
+    local docked_spider_data = create_spider_data(docked_spider)
+    global.spiders[docked_spider.unit_number] = docked_spider_data
     docked_spider_data.original_spider_name = serialised_spider.name
     docked_spider_data.armed_for = dock
     dock_data.docked_spider = docked_spider
@@ -405,8 +377,7 @@ end
 
 -- Retreives the serialised version of an actively docked spider
 -- this will remove the docked spider version
-local function dock_from_active_to_serialised(dock)
-    local dock_data = get_dock_data_from_entity(dock)
+local function dock_from_active_to_serialised(dock, dock_data)
     local docked_spider = dock_data.docked_spider
     if not docked_spider or not docked_spider.valid then return end
     local serialised_spider = spidertron_lib.serialise_spidertron(docked_spider)
@@ -431,7 +402,7 @@ local function update_circuit_output_for_interfaces(interfaces)
         -- it will give bad output, but that's fine, we never write any bugs.
         local dock_data = nil
         if not dock_data and interface_data.dock then
-            dock_data = get_dock_data_from_entity(interface_data.dock)
+            dock_data = global.docks[interface_data.dock.unit_number]
         end
 
         -- Now set the signals if there is dock_data, or clear it otherwise
@@ -458,7 +429,7 @@ end)
 -- This will dock a spider, and not
 -- do any checks.
 local function dock_spider(dock, spider)
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
 
     -- Some smoke and mirrors
     dock.create_build_effect_smoke()
@@ -466,11 +437,11 @@ local function dock_spider(dock, spider)
     dock.surface.play_sound{path="ss-spidertron-dock-2", position=dock.position}
     
     -- Docking procedure
-    local serialised_spider = dock_from_spider_to_serialised(dock, spider)
+    local serialised_spider = dock_from_spider_to_serialised(dock, dock_data, spider)
     if dock_data.mode == "passive" then
-        dock_from_serialised_to_passive(dock, serialised_spider)
+        dock_from_serialised_to_passive(dock, dock_data, serialised_spider)
     else
-        dock_from_serialised_to_active(dock, serialised_spider)
+        dock_from_serialised_to_active(dock, dock_data, serialised_spider)
     end
 
     update_circuit_output_for_interfaces(dock_data.interfaces)
@@ -479,7 +450,7 @@ end
 -- This will undock a spider, and not
 -- do any checks.
 local function undock_spider(dock)
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
 
     -- Some smoke and mirrors
     dock.create_build_effect_smoke()
@@ -489,11 +460,11 @@ local function undock_spider(dock)
     -- Undocking procedure
     local serialised_spider = nil
     if dock_data.mode == "passive" then
-        serialised_spider = dock_from_passive_to_serialised(dock)
+        serialised_spider = dock_from_passive_to_serialised(dock, dock_data)
     else
-        serialised_spider = dock_from_active_to_serialised(dock)
+        serialised_spider = dock_from_active_to_serialised(dock, dock_data)
     end
-    local spider = dock_from_serialised_to_spider(dock, serialised_spider)
+    local spider = dock_from_serialised_to_spider(dock, dock_data, serialised_spider)
 
     update_circuit_output_for_interfaces(dock_data.interfaces)
 
@@ -503,8 +474,8 @@ end
 -- This function will attempt the dock
 -- of a spider.
 function attempt_dock(spider)
-    local spider_data = get_spider_data_from_entity(spider)
-    if not spider_data.armed_for then return end
+    local spider_data = global.spiders[spider.unit_number]
+    if not spider_data or not spider_data.armed_for then return end
 
     -- Find the dock this spider armed for in the region
     -- We check the area because spidertrons are innacurate
@@ -524,7 +495,7 @@ function attempt_dock(spider)
     if not dock then return end
 
     -- Check if dock is occupied
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
     if dock_data.occupied then return end
 
     -- Check if this spider is allowed to dock here
@@ -612,15 +583,15 @@ script.on_event(defines.events.on_player_used_spider_remote,
     function (event)
         local spider = event.vehicle
         if spider and spider.valid then
-            local spider_data = get_spider_data_from_entity(spider)
-            spider_data.recall_target = nil -- Remotes always overwrite recall commands
+            local spider_data = global.spiders[spider.unit_number]
 
+            
             -- First check if this is a docked spider. If it is, then
             -- will attempt an undock.
             if name_is_docked_spider(spider.name) then
                 local dock = spider_data.armed_for
                 if not dock or not dock.valid then return end
-                local dock_data = get_dock_data_from_entity(dock)
+                local dock_data = global.docks[dock.unit_number]
                 local player = game.get_player(event.player_index)
                 if not attempt_undock(dock_data, player) and spider.valid then
                     -- This was not a successfull undock event. Prevent
@@ -629,8 +600,11 @@ script.on_event(defines.events.on_player_used_spider_remote,
                     spider.autopilot_destination = nil
                 end
                 return
-            end
-            
+            end        
+
+            -- Remotes always overwrite recall commands
+            spider_data.recall_target = nil
+
             -- Now we know the current spider is not a docked version. Check if the player
             -- is directing a spider to a dock to dock the spider
             local dock = spider.surface.find_entity("ss-spidertron-dock-active", event.position)
@@ -640,7 +614,7 @@ script.on_event(defines.events.on_player_used_spider_remote,
             if dock then
                 -- This waypoint was placed on a valid dock!
                 -- Arm the dock so that spider is allowed to dock there
-                local dock_data = get_dock_data_from_entity(dock)
+                local dock_data = global.docks[dock.unit_number]
                 if dock.force ~= spider.force then return end
                 if dock_data.occupied then return end
                 spider_data.armed_for = dock
@@ -656,7 +630,7 @@ script.on_event(defines.events.on_player_used_spider_remote,
 
 local function dock_connect_to_interface(dock, interface)
     -- Do the connection
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
     local interface_unit_number = interface.unit_number
     dock_data.interfaces[interface_unit_number] = interface
     global.interfaces[interface_unit_number].dock = dock
@@ -667,7 +641,7 @@ end
 
 local function dock_disconnect_from_interface(dock, interface)
     -- Do the connection
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
     local interface_unit_number = interface.unit_number
     dock_data.interfaces[interface_unit_number] = nil
     global.interfaces[interface_unit_number].dock = nil
@@ -730,7 +704,11 @@ local function interface_built(interface, mute)
 end
 
 local function dock_built(dock, mute)
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
+    if not dock_data then
+        dock_data = create_dock_data(dock)
+        global.docks[dock.unit_number] = dock_data
+    end
 
     -- Look for interfaces around this dock, and attempt to connect any of them
     for _, interface in pairs (dock.surface.find_entities_filtered{
@@ -774,6 +752,11 @@ local function on_built(event)
         dock_built(entity)
         return
     end
+
+    if entity.type == "spider-vehicle" then
+        global.spiders[entity.unit_number] = create_spider_data(entity)
+        -- TODO Auto dock when placed on dock? Sounds cool
+    end
 end
 
 script.on_event(defines.events.on_robot_built_entity, on_built)
@@ -787,8 +770,10 @@ local function on_deconstructed(event)
     local player = event.player_index and game.get_player(event.player_index) or nil
     if entity and entity.valid then
         if name_is_dock(entity.name) then
-            attempt_undock(get_dock_data_from_entity(entity), player, true)
-            for _, interface in pairs(global.docks[entity.unit_number].interfaces) do
+            local dock_data = global.docks[entity.unit_number]
+            if not dock_data then return end
+            attempt_undock(dock_data, player, true)
+            for _, interface in pairs(dock_data.interfaces) do
                 if interface.valid then
                     interface.create_build_effect_smoke()
                     global.interfaces[interface.unit_number].dock = nil
@@ -800,16 +785,18 @@ local function on_deconstructed(event)
             if not interface_data or not interface_data.dock then return end
             if interface_data.dock.valid then
                 interface_data.dock.create_build_effect_smoke()
-                local dock_data = get_dock_data_from_entity(interface_data.dock)
+                local dock_data = global.docks[interface_data.dock.unit_number]
                 dock_data.interfaces[entity.unit_number] = nil
             end
             global.interfaces[entity.unit_number] = nil
         elseif entity.type == "spider-vehicle" then
             if name_is_docked_spider(entity.name) then
-                local spider_data = get_spider_data_from_entity(entity)
+                -- Deconstructing a docked spider will pop out the undocked version
+                local spider_data = global.spiders[entity.unit_number]
+                if not spider_data then return end -- Should never happen
                 local dock = spider_data.armed_for
                 if not dock or not dock.valid then return end
-                local dock_data = get_dock_data_from_entity(dock)
+                local dock_data = global.docks[dock.unit_number]
                 attempt_undock(dock_data, player, true)
             else
                 global.spiders[entity.unit_number] = nil
@@ -840,7 +827,7 @@ script.on_event("ss-spidertron-dock-toggle", function(event)
     
     -- By this point we know that this is a dock the player can toggle
     -- We need to be careful with the data
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
 
     -- Toggle the mode
     local new_mode = dock_data.mode == "active" and "passive" or "active"
@@ -851,19 +838,21 @@ script.on_event("ss-spidertron-dock-toggle", function(event)
         position = dock.position,
         force = dock.force,
         create_build_effect_smoke = false,
-        raise_built = true,
+        raise_built = true,     -- Will create the new data create connections
         player = player,
     } -- Will set the mode correctly
     new_dock.health = dock.health
     new_dock.energy = dock.energy
+    local new_dock_data = global.docks[new_dock.unit_number]
 
-    -- Transfer the data
+    -- Transfer the data from old to new dock
     local key_blacklist = {
         ["mode"]=true,
         ["dock_entity"]=true,
         ["unit_number"]=true,
-        ["dock_unit_number"]=true}
-    local new_dock_data = get_dock_data_from_entity(new_dock)
+        ["dock_unit_number"]=true,
+        ["interfaces"]=true,    -- Will be determined by on_built
+    }
     for key, value in pairs(dock_data) do
         if not key_blacklist[key] then
             new_dock_data[key] = value
@@ -874,12 +863,12 @@ script.on_event("ss-spidertron-dock-toggle", function(event)
     if new_dock_data.occupied then        
         if new_dock_data.mode == "active" then
             -- Dock was passive, so now we need to create a spider entity
-            local serialised_spider = dock_from_passive_to_serialised(new_dock)
-            dock_from_serialised_to_active(new_dock, serialised_spider)
+            local serialised_spider = dock_from_passive_to_serialised(new_dock, new_dock_data)
+            dock_from_serialised_to_active(new_dock, new_dock_data, serialised_spider)
         else
             -- Dock was active, so now we remove a spider entity
-            local serialised_spider = dock_from_active_to_serialised(new_dock)
-            dock_from_serialised_to_passive(new_dock, serialised_spider)
+            local serialised_spider = dock_from_active_to_serialised(new_dock, new_dock_data)
+            dock_from_serialised_to_passive(new_dock, new_dock_data, serialised_spider)
         end
         
         -- Play nice sound if dock is occupied
@@ -909,7 +898,7 @@ local function picker_dollies_move_event(event)
     local entity = event.moved_entity
     if name_is_dock(entity.name) then
         local dock = entity
-        local dock_data = get_dock_data_from_entity(dock)
+        local dock_data = global.docks[dock.unit_number]
         -- Handle the docked spider entity
         if dock.name == "ss-spidertron-dock-active" then
             if dock_data.occupied then
@@ -991,12 +980,13 @@ script.on_event(defines.events.on_entity_cloned, function(event)
     local destination = event.destination
     local name = destination.name
     if not source or not source.valid then return end
-    if not destination or not destination.valid then return end    
+    if not destination or not destination.valid then return end
 
     if name_is_dock(name) then
-        local source_dock_data = get_dock_data_from_entity(source)
-        local destination_dock_data = get_dock_data_from_entity(destination)
-        
+        local source_dock_data = global.docks[source.unit_number]
+        local destination_dock_data = create_dock_data(destination)
+        global.docks[destination.unit_number] = destination_dock_data
+
         -- Move data from source dock to new dock
         local keys_to_copy = { -- Which keys to copy from source dock data
             "occupied",
@@ -1037,13 +1027,14 @@ end)
 local function dock_recall_last_spider(dock)
     -- We will only recall the spider to the dock if it's
     -- not already on it's way to this dock
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
     local spider = dock_data.last_docked_spider
     if not spider or not spider.valid then
         dock_data.last_docked_spider = nil
         return
     end 
-    local spider_data = get_spider_data_from_entity(spider)
+    local spider_data = global.spiders[spider.unit_number]
+    if not spider_data then return end
     if spider_data.recall_target == dock then return end
     if spider and spider.valid and spider.surface == dock.surface then
         spider.autopilot_destination = nil -- Clear current waypoints
@@ -1129,8 +1120,8 @@ function funcs.update_spider_gui_for_player(player, spider)
     -- Now redraw it if we're looking at a docked spider
     
     if not spider then return end
-    local spider_data = get_spider_data_from_entity(spider)
     if not name_is_docked_spider(spider.name) then return end
+    local spider_data = global.spiders[spider.unit_number]
 
     -- Decide if we should rebuild. We will only build
     -- if the player is currently looking at this docked spider
@@ -1180,7 +1171,7 @@ function funcs.update_dock_gui_for_player(player, dock)
     -- All docks have their GUIs destroyed for this player
     -- If this dock is not occupied then we don't need
     -- to redraw anything
-    local dock_data = get_dock_data_from_entity(dock)
+    local dock_data = global.docks[dock.unit_number]
     if not dock_data then return end -- Other accumulator type
     if not dock_data.occupied then return end
 
@@ -1244,11 +1235,10 @@ script.on_event(defines.events.on_gui_click, function(event)
         if parent.name == "ss-spidertron-dock" then
             dock_data = global.docks[parent.tags.dock_unit_number]
         elseif parent.name == "ss-docked-spider" then
-            local spider_data = get_spider_data_from_unit_number(
-                element.parent.tags.spider_unit_number)
+            local spider_data = global.spiders[element.parent.tags.spider_unit_number]
             if not spider_data then return end
             if not spider_data.armed_for.valid then return end
-            dock_data = get_dock_data_from_entity(spider_data.armed_for)
+            dock_data = global.docks[spider_data.armed_for.unit_number]
         end
         if not dock_data then return end
         attempt_undock(dock_data, player)
@@ -1280,7 +1270,7 @@ script.on_event(defines.events.on_selected_entity_changed , function(event)
     local entity = player.selected
     if not entity or not entity.valid then return end
     if name_is_dock(entity.name) then
-        local dock_data = get_dock_data_from_entity(entity)
+        local dock_data = global.docks[entity.unit_number]
         local surface = entity.surface
         for interface_unit_number, interface in pairs(dock_data.interfaces) do
             table.insert(player_data.selection_boxes, surface.create_entity{
@@ -1471,6 +1461,24 @@ remote.add_interface("spidertron-dock", {
         
         for spider_unit_number, spider_data in pairs(data.spiders) do
             global.spiders[spider_unit_number] = util.table.deepcopy(spider_data)
+        end
+
+        -- The space spidertron also handled dock_data in a stupid way where we're
+        -- not tracking all docks in global. So go through all surfaces and ensure 
+        -- we have entries for all docks. The same goes for spiders.
+        for _, surface in pairs(game.surfaces) do
+            for _, dock in pairs(surface.find_entities_filtered{
+                name = { "ss-spidertron-dock-active", "ss-spidertron-dock-passive"}
+            }) do
+                if not global.docks[dock.unit_number] then
+                    global.docks[dock.unit_number] = create_dock_data(dock)
+                end
+            end
+            for _, spider in pairs(surface.find_entities_filtered{type = "spider-vehicle"}) do
+                if not global.spiders[spider.unit_number] then
+                    global.spiders[spider.unit_number] = create_spider_data(spider)
+                end
+            end
         end
     end,
 })
