@@ -64,7 +64,10 @@ local function create_dock_data(dock_entity)
 
         -- This is so that we can always find where this dock
         -- is, even if the type and unit number change during migration.
-        position = dock_entity.position,
+        location = {
+            surface = dock_entity.surface,
+            position = dock_entity.position,
+        },
 
         -- Map of interfaces referenced by their unit numbers, linked to
         -- the interface entity. A dock can have multiple interfaces.
@@ -122,7 +125,10 @@ local function create_interface_data(interface)
 
         -- This is so that we can always find where this interface
         -- is, even if the type and unit number change during migration.
-        position = interface.position,
+        location = {
+            surface = interface.surface,
+            position = interface.position,
+        },
 
         -- The dock entity this interface is connected to
         dock = nil,
@@ -1454,7 +1460,10 @@ remote.add_interface("spidertron-dock", {
         for dock_unit_number, dock_data in pairs(data.docks) do
             dock_data.interfaces = { }
             if dock_data.dock_entity and dock_data.dock_entity.valid then
-                dock_data.position = dock_data.dock_entity.position
+                dock_data.location = {
+                    surface = dock_data.dock_entity.surface,
+                    position = dock_data.dock_entity.position,
+                }
                 global.docks[dock_unit_number] = util.table.deepcopy(dock_data)
             end
         end
