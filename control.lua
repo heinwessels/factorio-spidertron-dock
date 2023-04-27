@@ -136,10 +136,6 @@ local function create_interface_data(interface)
         -- Cache this constant combinator's control behaviour
         -- for quick setting of signals.
         control_behaviour = interface.get_control_behavior(),
-
-        -- Cache of the circuit network. The validity of this
-        -- cached data needs to be verified before it's used
-        circuit_network = { red = nil, green = nil }
     }
 end
 
@@ -479,7 +475,7 @@ end
 
 -- This function will attempt the dock
 -- of a spider.
-function attempt_dock(spider)
+local function attempt_dock(spider)
     local spider_data = global.spiders[spider.unit_number]
     if not spider_data or not spider_data.armed_for then return end
 
@@ -1060,38 +1056,23 @@ local function update_dock_circuits(dock_data, dock_unit_number)
     dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
 
     for interface_unit_number, interface in pairs(dock_data.interfaces) do
-        local interface_data = global.interfaces[interface_unit_number]
-        for wire_colour, wire_colour_define in pairs(wire_colours) do
-            local network = interface_data.circuit_network[wire_colour]
-            
-            -- This code checks if there is a circuit connection cached. If there are, then
-            -- ensure it's still valid (connected), and if not then get the new state. Or
-            -- if there's nothing cached then we will also check if there is something connected
-            -- now. This is faster than calling get_circuit_network everytime we need to update
-            if not network or not network.valid then
-                interface_data.circuit_network[wire_colour] = interface.get_circuit_network(wire_colour_define)
-                network = interface_data.circuit_network[wire_colour]
-            end
+        -- We read the merged signal, instead of caching get_circuit_network so that the circuits
+        -- behave consistently with vanilla entities. 
+        local get_merged_signal = interface.get_merged_signal  -- JanSharp says this is even better, thanks! :D
+        if dock_data.occupied and get_merged_signal(consts.undock_signal) > 0 then
+            attempt_undock(dock_data)
+            return -- When we do an action we don't have to check for other actions from other interfaces
 
-            -- network will contain a valid circuit network or be nil
-            if network then
-                -- Only see if there is a dock signal if dock is currently occupied
-                if dock_data.occupied and network.get_signal(consts.undock_signal) > 0 then
-                    attempt_undock(dock_data)
-                    return -- When we do an action we don't have to check for other actions
-
-                -- Only check if there is a recal signal if there is a spider to recal
-                elseif dock_data.last_docked_spider 
-                        and dock_data.last_docked_spider.valid 
-                        and network.get_signal(consts.recall_signal) > 0 then
-                    local dock = dock_data.dock_entity
-                    if not dock or not dock.valid then return end
-                    dock_recall_last_spider(dock)
-                    -- This will periodically still re-issue the recall command. That's fine,
-                    -- because this will probably not happen often anyway.
-                    return -- When we do an action we don't have to check for other actions
-                end
-            end
+        -- Only check if there is a recal signal if there is a spider to recal
+        elseif dock_data.last_docked_spider 
+                and dock_data.last_docked_spider.valid 
+                and get_merged_signal(consts.recall_signal) > 0 then
+            local dock = dock_data.dock_entity
+            if not dock or not dock.valid then return end
+            dock_recall_last_spider(dock)
+            -- This will periodically still re-issue the recall command. That's fine,
+            -- because this will probably not happen often anyway.
+            return -- When we do an action we don't have to check for other actions from other interfaces
         end
     end
 end
