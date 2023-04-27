@@ -6,6 +6,8 @@ local consts = {
     occupied_signal = {type = "virtual", name="signal-O"},
     recall_signal = {type = "virtual", name="signal-R"},
     undock_signal = {type = "virtual", name="signal-U"},
+    active_mode_signal = {type = "virtual", name="signal-A"},
+    passive_mode_signal = {type = "virtual", name="signal-P"},
     dock_circuit_hysteresis = 120, -- In ticks
 }
 
@@ -812,27 +814,13 @@ script.on_event(defines.events.on_robot_mined_entity, on_deconstructed)
 script.on_event(defines.events.on_entity_died, on_deconstructed)
 script.on_event(defines.events.script_raised_destroy, on_deconstructed)
 
--- This will toggle the dock between active and passive mode.
--- This will change the actual dock entity below so that
--- it's easy to copy-paste with settings. And have better tooltips
-script.on_event("ss-spidertron-dock-toggle", function(event)
-    local player = game.get_player(event.player_index)
-    if not player then return end
-    local dock = player.selected
-    if not dock or not dock.valid then return end
-    if dock.force ~= player.force then return end
-    if not name_is_dock(dock.name) then return end
-
-    -- If the player has something in the cursor, then we don't change
-    -- the dock type, because it's too easy to do it while building something.
-    if player.cursor_stack.valid_for_read then return end
-    
-    -- By this point we know that this is a dock the player can toggle
-    -- We need to be careful with the data
+local function dock_switch_to_mode(dock, new_mode)
     local dock_data = global.docks[dock.unit_number]
 
-    -- Toggle the mode
-    local new_mode = dock_data.mode == "active" and "passive" or "active"
+    if not new_mode then
+        -- If new_mode is nil then it means toggle
+        new_mode = dock_data.mode == "active" and "passive" or "active"
+    elseif dock_data.mode == new_mode then return end
 
     -- Create the new entity
     local new_dock = dock.surface.create_entity{
@@ -891,6 +879,26 @@ script.on_event("ss-spidertron-dock-toggle", function(event)
     -- will think the dock is still occupied
     global.docks[dock_data.unit_number] = nil
     dock.destroy{raise_destroy=true}
+end
+
+-- This will toggle the dock between active and passive mode.
+-- This will change the actual dock entity below so that
+-- it's easy to copy-paste with settings. And have better tooltips
+script.on_event("ss-spidertron-dock-toggle", function(event)
+    local player = game.get_player(event.player_index)
+    if not player then return end
+    local dock = player.selected
+    if not dock or not dock.valid then return end
+    if dock.force ~= player.force then return end
+    if not name_is_dock(dock.name) then return end
+
+    -- If the player has something in the cursor, then we don't change
+    -- the dock type, because it's too easy to do it while building something.
+    if player.cursor_stack.valid_for_read then return end
+    
+    -- By this point we know that this is a dock the player can toggle
+    -- We need to be careful with the data
+    dock_switch_to_mode(dock, nil)  -- nil means toggle    
 end)
 
 -- We can move docks with picker dollies, regardless
@@ -1054,25 +1062,40 @@ local function update_dock_circuits(dock_data, dock_unit_number)
     local tick = game.tick    
     if dock_data.circuit_hysteresis and tick < dock_data.circuit_hysteresis then return end
     dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
+    
+    -- Sanity check, this should never happen
+    local dock = dock_data.dock_entity
+    if not dock or not dock.valid then return end
 
-    for interface_unit_number, interface in pairs(dock_data.interfaces) do
+    -- Loop through all interfaces and look for commands. If we find any command then
+    -- we execute it and ignore all other commands from other interfaces. This works because
+    -- we only check for commands that can be executed, so if there's two commands from differetn
+    -- interface they will be executed sequentially with a 1 second gap, which is fine. Will
+    -- probably not happen often anyway, most players will use one interface.
+    for interface_unit_number, interface in pairs(dock_data.interfaces) do       
+
         -- We read the merged signal, instead of caching get_circuit_network so that the circuits
         -- behave consistently with vanilla entities. 
         local get_merged_signal = interface.get_merged_signal  -- JanSharp says this is even better, thanks! :D
         if dock_data.occupied and get_merged_signal(consts.undock_signal) > 0 then
             attempt_undock(dock_data)
-            return -- When we do an action we don't have to check for other actions from other interfaces
+            return
 
         -- Only check if there is a recal signal if there is a spider to recal
         elseif dock_data.last_docked_spider 
                 and dock_data.last_docked_spider.valid 
-                and get_merged_signal(consts.recall_signal) > 0 then
-            local dock = dock_data.dock_entity
-            if not dock or not dock.valid then return end
+                and get_merged_signal(consts.recall_signal) > 0 then            
             dock_recall_last_spider(dock)
             -- This will periodically still re-issue the recall command. That's fine,
             -- because this will probably not happen often anyway.
-            return -- When we do an action we don't have to check for other actions from other interfaces
+            return
+        
+        elseif dock_data.mode == "active" and get_merged_signal(consts.passive_mode_signal) > 0 then
+            dock_switch_to_mode(dock, "passive")
+            return
+        elseif dock_data.mode == "passive" and get_merged_signal(consts.active_mode_signal) > 0 then
+            dock_switch_to_mode(dock, "active")
+            return
         end
     end
 end
