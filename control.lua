@@ -214,7 +214,7 @@ local function dock_does_not_support_spider(dock, spider)
     -- being able to dock to a spaceship they can't walk on because the body
     -- can still reach the dock. We do this by checking if the first leg collides
     -- with a tile underneath the dock
-    if game.active_mods["space-exploration"]
+    if game.active_mods["space-exploration"] and game.active_mods["space-spidertron"]
             and not settings.startup["space-spidertron-allow-other-spiders-in-space"].value then
         -- Only do it if we care about it though
 
@@ -588,16 +588,20 @@ script.on_event(defines.events.on_player_used_spider_remote,
         local spider = event.vehicle
         if spider and spider.valid then
             local spider_data = global.spiders[spider.unit_number]
-
             
             -- First check if this is a docked spider. If it is, then
             -- will attempt an undock.
             if name_is_docked_spider(spider.name) then
                 local dock = spider_data.armed_for
                 if not dock or not dock.valid then
-                    -- This should never happen! We should be able to fix it though.
-                    log("Docked spider ("..spider.name..") at position "..serpent.line(spider.position).." on surface "..spider.surface.name.." lost connection to its dock! Will fix automatically.")
-                    local docks = spider.surface.find_entities_filtered{name={"ss-spidertron-dock-active", "ss-spidertron-dock-passive"}}
+                    -- This should never happen! A docked spider should always know where it's dock is.
+                    -- We should be able to fix it though. If not, then it's bad.
+                    log("Docked spider ("..spider.name..") at position "..serpent.line(spider.position)..
+                        " on surface "..spider.surface.name.." lost connection to its dock! Will fix automatically.")
+                    local docks = spider.surface.find_entities_filtered{
+                        position = spider.position,
+                        name={"ss-spidertron-dock-active", "ss-spidertron-dock-passive"},
+                    }
                     if not docks then error("No docks found underneath docked spider with missing dock information!") end
                     spider_data.armed_for = docks[1]
                     dock = spider_data.armed_for                    
@@ -714,7 +718,7 @@ local function interface_built(interface, mute)
     end
 end
 
-local function dock_built(dock, mute)
+local function dock_on_built(dock, mute)
     local dock_data = global.docks[dock.unit_number]
     if not dock_data then
         dock_data = create_dock_data(dock)
@@ -760,7 +764,7 @@ local function on_built(event)
     end
 
     if name_is_dock(name) then
-        dock_built(entity)
+        dock_on_built(entity)
         return
     end
 
@@ -1033,7 +1037,7 @@ script.on_event(defines.events.on_entity_cloned, function(event)
         end
 
         -- Do this last, because it will handle the interface connection
-        dock_built(destination, true) -- Will auto-connect to interfaces if available
+        dock_on_built(destination, true) -- Will auto-connect to interfaces if available
 
         -- The old dock entity will be removed by a destroy event by SE
     elseif name == "sd-spidertron-dock-interface" then
@@ -1324,15 +1328,22 @@ local function sanitize_docks()
                 if dock_data.mode == "active" then
                     if dock_data.docked_spider and not dock_data.docked_spider.valid then
                         -- This spider entity is no longer supported for docking. In this
-                        -- case the data will be lost
-                        table.insert(marked_for_deletion, unit_number)
+                        -- case the data will be lost. Reset the dock.
+                        global.docks[unit_number] = nil
+                        dock_on_built(dock)
                     end
                 elseif dock_data.mode == "passive" then
                     if not global.spider_whitelist[dock_data.spider_name] then
-                        -- This spider is no longer supported. We can undock the spider though
-                        -- because we still have the serialized information
-                        attempt_undock(dock_data, nil, true)
-                        table.insert(marked_for_deletion, unit_number)
+                        -- This spider is no longer supported. We might even be able
+                        -- to undock this spider. Then we reset the dock data
+                        if game.entity_prototypes[dock_data.spider_name] then
+                            -- The actual spider still exists! Try to undock
+                            attempt_undock(dock_data, nil, true)
+                        end
+
+                        -- Reset
+                        global.docks[unit_number] = nil
+                        dock_on_built(dock)
                     end
                 end
             end
@@ -1439,12 +1450,26 @@ script.on_configuration_changed(function (event)
             -- find an actual dock somewhere, because otherwise it doesn't matter.
             for _, surface in pairs(game.surfaces) do
                 if surface.count_entities_filtered{name={"ss-spidertron-dock-active", "ss-spidertron-dock-passive"}} then
-                    error("Space Spidertron mod is required to migrate previous dock entities to new Spidertron Dock mod.")
+                    error("Space Spidertron mod is required to migrate previous dock entities to new Spidertron Dock mod. "..
+                        "Load Spidertron Dock with Space Spidertron at least once to retain current docks.")
                 end
             end
         end
     end
 
+    -- We also need to make sure the space-spidertron is new enough so that they don't
+    -- both try to manage the dock data. It needs to be at least v1.3.
+    if script.active_mods["space-spidertron"] then
+        -- We're mimicking how Xorimuth determines versions
+        local version =  util.split(script.active_mods["space-spidertron"], ".")
+        for i = 1, #version do version[i] = tonumber(version[i]) end
+        if version[1] < 1 or (version[1] == 1 and version[2] < 3) then
+            -- This space spidertron version is too old! 
+            error("Spidertron Dock only supports Space Spidertron v1.3 or newer!")
+        end
+    end
+
+    -- And now starts the happy flow.
     global.docks = global.docks or {}
     global.spiders = global.spiders or {}
     global.spider_whitelist = build_spider_whitelist()
