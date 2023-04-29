@@ -2,6 +2,11 @@
 Version: 1.0.0
 Date: ??.??.2023
   Features:
-    - Space Spidertron is now a standalone mod, split of from Space Spidertron.
+    - Spidertron Dock is now a standalone mod, split of from Space Spidertron.
+    - Dock now supports the circuit network by using a Dock Interface:
+      - Supports switching between Passive and Active docking modes.
+      - Supports undocking the currently docked spider.
+      - Supports recalling the last docked spider.
+      - Outputs a signal when the dock is occupied.
   Changes:
-    - Docking mode is only changed with the R-button when the player's cursor is empty.
+    - Docking mode is toggled through the R-button only when the player's cursor is empty.

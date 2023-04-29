@@ -594,7 +594,14 @@ script.on_event(defines.events.on_player_used_spider_remote,
             -- will attempt an undock.
             if name_is_docked_spider(spider.name) then
                 local dock = spider_data.armed_for
-                if not dock or not dock.valid then return end
+                if not dock or not dock.valid then
+                    -- This should never happen! We should be able to fix it though.
+                    log("Docked spider ("..spider.name..") at position "..serpent.line(spider.position).." on surface "..spider.surface.name.." lost connection to its dock! Will fix automatically.")
+                    local docks = spider.surface.find_entities_filtered{name={"ss-spidertron-dock-active", "ss-spidertron-dock-passive"}}
+                    if not docks then error("No docks found underneath docked spider with missing dock information!") end
+                    spider_data.armed_for = docks[1]
+                    dock = spider_data.armed_for                    
+                end
                 local dock_data = global.docks[dock.unit_number]
                 local player = game.get_player(event.player_index)
                 if not attempt_undock(dock_data, player) and spider.valid then
@@ -1420,6 +1427,24 @@ script.on_load(function()
 end)
 
 script.on_configuration_changed(function (event)
+    -- First we make sure that this mod wasn't added to a save that
+    -- previously contained docks from Space Spidertron, but without
+    -- Space Spidertron active. It's possible, because this mod
+    -- doesn't depend on Space Spidertron.
+    if not event.mod_changes["spidertron-dock"] or not event.mod_changes["spidertron-dock"].old_version then
+        -- Spidertron Dock was not enabled previously
+        if not next(global.docks) and not script.active_mods["space-spidertron"] then
+            -- So Space Spidertron was removed, and Spidertron dock added, so there's
+            -- a chance something went bad. But we will only raise an error if we 
+            -- find an actual dock somewhere, because otherwise it doesn't matter.
+            for _, surface in pairs(game.surfaces) do
+                if surface.count_entities_filtered{name={"ss-spidertron-dock-active", "ss-spidertron-dock-passive"}} then
+                    error("Space Spidertron mod is required to migrate previous dock entities to new Spidertron Dock mod.")
+                end
+            end
+        end
+    end
+
     global.docks = global.docks or {}
     global.spiders = global.spiders or {}
     global.spider_whitelist = build_spider_whitelist()
@@ -1429,25 +1454,9 @@ script.on_configuration_changed(function (event)
     picker_dollies_blacklist_docked_spiders()
     sanitize_docks()
 
-    -- Fix technologies
-    local technology_unlocks_spidertron = false
-    for index, force in pairs(game.forces) do
-        for _, technology in pairs(force.technologies) do		
-            if technology.effects then			
-                for _, effect in pairs(technology.effects) do
-                    if effect.type == "unlock-recipe" then					
-                        if effect.recipe == "spidertron" then
-                            technology_unlocks_spidertron = true
-                        end
-                    end
-                end
-                if technology_unlocks_spidertron then
-                    force.recipes["ss-spidertron-dock"].enabled = technology.researched
-                    force.recipes["sd-spidertron-dock-interface"].enabled = technology.researched
-                    break
-                end
-            end
-        end
+    -- Fix technologies and recipes
+    for _, force in pairs(game.forces) do
+        force.reset_technology_effects()
     end
 end)
 
