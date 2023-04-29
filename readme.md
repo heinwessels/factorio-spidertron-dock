@@ -14,8 +14,8 @@ A spidertron dock designed to be used with [Space Exploration](https://mods.fact
 
 **Note:** This mod's functionality was originally part of the mod [Space Spidertron](https://mods.factorio.com/mod/space-spidertron).
 ## Credits
-- [LTL Customs](https://www.instagram.com/ltl_customs/) for realizing the `Spidertron Drock Interface` sprites.
+- [LTL Customs](https://www.instagram.com/ltl_customs/) for realizing the `Spidertron Dock Interface` sprites.
 - [Xorimuth](https://mods.factorio.com/user/Xorimuth) for the super useful `spidertron_lib`, and expanding Factorio itself to allow spidertrons be stationary on the dock.
-- [Klonan](https://mods.factorio.com/mod/Transport_Drones) for how to create an interface combinator.
+- [Klonan](https://mods.factorio.com/mod/Transport_Drones) for the suggestion and example of how to create an circuit interface combinator.
 - [Earendel](https://mods.factorio.com/user/Earendel) for Space Exploration - the most epic mod on the portal!
 - justarandomgeek for this [Factorio debugger](https://marketplace.visualstudio.com/items?itemName=justarandomgeek.factoriomod-debug), without which this mod would not have been possible.

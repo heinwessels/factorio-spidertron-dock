@@ -1449,7 +1449,7 @@ script.on_configuration_changed(function (event)
             -- a chance something went bad. But we will only raise an error if we 
             -- find an actual dock somewhere, because otherwise it doesn't matter.
             for _, surface in pairs(game.surfaces) do
-                if surface.count_entities_filtered{name={"ss-spidertron-dock-active", "ss-spidertron-dock-passive"}} then
+                if surface.count_entities_filtered{name={"ss-spidertron-dock-active", "ss-spidertron-dock-passive"}} > 0 then
                     error("Space Spidertron mod is required to migrate previous dock entities to new Spidertron Dock mod. "..
                         "Load Spidertron Dock with Space Spidertron at least once to retain current docks.")
                 end
