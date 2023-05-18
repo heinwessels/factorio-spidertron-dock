@@ -1474,12 +1474,15 @@ script.on_configuration_changed(function (event)
         -- there's a chance there's some spiders roaming without us knowing about
         -- them. Do a search and ensure we have all stored in global.
         -- We're mimicking how Xorimuth determines versions
-        local old_version = event.mod_changes["spidertron-dock"].old_version
-        if old_version == nil or old_version == "1.0.0" then
-            for _, surface in pairs(game.surfaces) do
-                for _, spider in pairs(surface.find_entities_filtered{type = "spider-vehicle"}) do
-                    if not global.spiders[spider.unit_number] then
-                        global.spiders[spider.unit_number] = create_spider_data(spider)
+        local mod_changes = event.mod_changes["spidertron-dock"]
+        if mod_changes then
+            local old_version = mod_changes.old_version
+            if old_version == nil or old_version == "1.0.0" then
+                for _, surface in pairs(game.surfaces) do
+                    for _, spider in pairs(surface.find_entities_filtered{type = "spider-vehicle"}) do
+                        if not global.spiders[spider.unit_number] then
+                            global.spiders[spider.unit_number] = create_spider_data(spider)
+                        end
                     end
                 end
             end
