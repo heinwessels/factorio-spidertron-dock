@@ -1469,6 +1469,23 @@ script.on_configuration_changed(function (event)
         end
     end
 
+    do
+        -- If Spidertron Dock is newly added, or version 1.0.0 or lower, then
+        -- there's a chance there's some spiders roaming without us knowing about
+        -- them. Do a search and ensure we have all stored in global.
+        -- We're mimicking how Xorimuth determines versions
+        local old_version = event.mod_changes["spidertron-dock"].old_version
+        if old_version == nil or old_version == "1.0.0" then
+            for _, surface in pairs(game.surfaces) do
+                for _, spider in pairs(surface.find_entities_filtered{type = "spider-vehicle"}) do
+                    if not global.spiders[spider.unit_number] then
+                        global.spiders[spider.unit_number] = create_spider_data(spider)
+                    end
+                end
+            end
+        end
+    end
+
     -- And now starts the happy flow.
     global.docks = global.docks or {}
     global.spiders = global.spiders or {}
@@ -1512,18 +1529,14 @@ remote.add_interface("spidertron-dock", {
 
         -- The space spidertron also handled dock_data in a stupid way where we're
         -- not tracking all docks in global. So go through all surfaces and ensure 
-        -- we have entries for all docks. The same goes for spiders.
+        -- we have entries for all docks. This is the only case where there might
+        -- be left over docks that's not stored in global.
         for _, surface in pairs(game.surfaces) do
             for _, dock in pairs(surface.find_entities_filtered{
                 name = { "ss-spidertron-dock-active", "ss-spidertron-dock-passive"}
             }) do
                 if not global.docks[dock.unit_number] then
                     global.docks[dock.unit_number] = create_dock_data(dock)
-                end
-            end
-            for _, spider in pairs(surface.find_entities_filtered{type = "spider-vehicle"}) do
-                if not global.spiders[spider.unit_number] then
-                    global.spiders[spider.unit_number] = create_spider_data(spider)
                 end
             end
         end

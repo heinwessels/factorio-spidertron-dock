@@ -3,6 +3,7 @@ Version: 1.0.1
 Date: 18.05.2023
   Bugfixes:
     - Fix crash when adding Space Spidertron to existing save.
+    - Fix rare migration issue where spiders aren't tracked correctly. (Thanks septemus!)
 ---------------------------------------------------------------------------------------------------
 Version: 1.0.0
 Date: 29.04.2023
