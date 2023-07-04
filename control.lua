@@ -1386,12 +1386,17 @@ local function build_spider_whitelist()
     return whitelist
 end
 
-local function picker_dollies_blacklist_docked_spiders()
-    if remote.interfaces["PickerDollies"] and remote.interfaces["PickerDollies"]["add_blacklist_name"] then
-        local spiders = game.get_filtered_entity_prototypes({{filter="type", type="spider-vehicle"}})
-        for _, spider in pairs(spiders) do
-            if name_is_docked_spider(spider.name) then
+local function update_runtime_mod_compatibility ()
+    local spiders = game.get_filtered_entity_prototypes({{filter="type", type="spider-vehicle"}})
+    for _, spider in pairs(spiders) do
+        if name_is_docked_spider(spider.name) then
+            
+            if remote.interfaces["PickerDollies"] and remote.interfaces["PickerDollies"]["add_blacklist_name"] then
                 remote.call("PickerDollies", "add_blacklist_name",  spider.name)
+            end
+            
+            if remote.interfaces["wandering-spiders"] and remote.interfaces["wandering-spiders"]["ignore_spider"] then
+                remote.call("wandering-spiders", "ignore_spider",  spider.name)
             end
         end
     end
@@ -1433,7 +1438,7 @@ script.on_init(function()
     global.spider_whitelist = build_spider_whitelist()
     global.interfaces = {}
     global.players = {}
-    picker_dollies_blacklist_docked_spiders()
+    update_runtime_mod_compatibility ()
     
     -- Add support for picker dollies
     if remote.interfaces["PickerDollies"] 
@@ -1509,7 +1514,7 @@ script.on_configuration_changed(function (event)
     global.interfaces = global.interfaces or {}
     global.players = global.players or {}
     
-    picker_dollies_blacklist_docked_spiders()
+    update_runtime_mod_compatibility ()
     sanitize_docks()
 
     -- Fix technologies and recipes
