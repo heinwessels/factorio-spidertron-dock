@@ -890,6 +890,9 @@ local function dock_switch_to_mode(dock, new_mode)
     -- will think the dock is still occupied
     global.docks[dock_data.unit_number] = nil
     dock.destroy{raise_destroy=true}
+
+    -- Refresh the dock's interfaces
+    update_circuit_output_for_interfaces(new_dock_data.interfaces)
 end
 
 -- This will toggle the dock between active and passive mode.
