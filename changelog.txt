@@ -3,6 +3,7 @@ Version: 1.0.3
 Date: 04.07.2023
   Bugfixes:
     - Fix dock circuit interface losing state when toggling the dock. (Thanks DistributionPurple51!)
+    - Fix dock circuit interface sometimes losing connection during cloning. (Thanks DistributionPurple51!)
 ---------------------------------------------------------------------------------------------------
 Version: 1.0.2
 Date: 18.05.2023

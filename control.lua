@@ -709,6 +709,16 @@ local function interface_built(interface, mute)
     -- Determine if it has connected dock
     local dock = interface_get_connected_dock(interface)
     if dock then
+
+        -- This dock's data _should_ already exist, but during SE's
+        -- cloning the interface might be cloned _before_ the dock,
+        -- which means the dock doesn't have data yet. In that case
+        -- ignore any connections now, because it will be setup during
+        -- the dock's initialization.
+        if se_active and not global.docks[dock.unit_number] then
+            return
+        end
+
         if not mute then
             dock.create_build_effect_smoke()
             interface.surface.play_sound{path="sd-spidertron-undock-wire", position=dock.position}
@@ -743,10 +753,10 @@ local function dock_on_built(dock, mute)
             else
                 -- The happy flow of this function
                 if not mute then
-                    dock_connect_to_interface(dock, interface)
                     interface.create_build_effect_smoke()
+                    dock.surface.play_sound{path="sd-spidertron-undock-wire", position=dock.position}
                 end
-                dock.surface.play_sound{path="sd-spidertron-undock-wire", position=dock.position}
+                dock_connect_to_interface(dock, interface)
             end
         end
     end
