@@ -6,6 +6,7 @@ Date: 04.07.2023
     - Fix dock circuit interface sometimes losing connection during cloning. (Thanks DistributionPurple51!)
   Changes:
     - Added compatibility with Sentient Spiders.
+    - Improved compatibility with AAI Programmable Vehicles.
 ---------------------------------------------------------------------------------------------------
 Version: 1.0.2
 Date: 18.05.2023
