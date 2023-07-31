@@ -617,6 +617,15 @@ script.on_event(defines.events.on_player_used_spider_remote,
                 return
             end        
 
+            if not global.spider_whitelist[spider.name] or not spider_data then
+                -- We don't support docking this spider, so ignore it.
+                -- We have to do this after cancelling a docked spider's remote usage
+                
+                -- We also do a sanity check to ensure we have data for this spider,
+                -- and simply ignore it instead of crashing.
+                return
+            end
+
             -- Remotes always overwrite recall commands
             spider_data.recall_target = nil
 
