@@ -148,7 +148,6 @@ function spidertron_lib.serialise_spidertron(spidertron)
   serialised_data.vehicle_logistic_requests_enabled = spidertron.vehicle_logistic_requests_enabled
   serialised_data.enable_logistics_while_moving = spidertron.enable_logistics_while_moving
   serialised_data.vehicle_automatic_targeting_parameters = spidertron.vehicle_automatic_targeting_parameters
-  serialised_data.request_from_buffers = spidertron.request_from_buffers
 
   serialised_data.autopilot_destinations = spidertron.autopilot_destinations
   serialised_data.follow_target = spidertron.follow_target
@@ -157,6 +156,13 @@ function spidertron_lib.serialise_spidertron(spidertron)
 
   serialised_data.health = spidertron.get_health_ratio()
 
+  -- No 100% reliable way to check if the call is valid.
+  -- `request_slot_count` returns 0 for spidertrons with no logistics, but also with no requests
+  -- trash inventory size > 0 works, except it isn't updated on an already-placed spidrtron
+  local status, request_from_buffers = pcall(function() return spidertron.request_from_buffers end)
+  if status then
+    serialised_data.request_from_buffers = request_from_buffers
+  end
 
   -- Inventories
   serialised_data.trunk = copy_inventory(spidertron.get_inventory(defines.inventory.spider_trunk))
