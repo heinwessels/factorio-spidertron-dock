@@ -1,12 +1,10 @@
 # [Spidertron Dock](https://mods.factorio.com/mod/spidertron-dock)
 
-[![shield](https://img.shields.io/badge/dynamic/json?color=orange&label=Factorio&query=downloads_count&suffix=%20downloads&url=https%3A%2F%2Fmods.factorio.com%2Fapi%2Fmods%2Fspidertron-dock)](https://mods.factorio.com/mod/spidertron-dock)
+[![shield](https://img.shields.io/badge/Ko--fi-Donate%20-hotpink?logo=kofi&logoColor=white)](https://ko-fi.com/stringweasel) [![shield](https://img.shields.io/badge/dynamic/json?color=orange&label=Factorio&query=downloads_count&suffix=%20downloads&url=https%3A%2F%2Fmods.factorio.com%2Fapi%2Fmods%2Fspidertron-dock)](https://mods.factorio.com/mod/spidertron-dock) [![shield](https://img.shields.io/badge/Crowdin-Translate-brightgreen)](https://crowdin.com/project/factorio-mods-localization)
 
 ![](https://raw.githubusercontent.com/heinwessels/factorio-spidertron-dock/main/mod-page/infographic.png)
 
 A spidertron dock designed to be used with [Space Exploration](https://mods.factorio.com/mod/space-exploration)'s spaceships. It safetely tucks away the spider on the spaceship, and could lower the required integrity dependent on the docking mode.
-
-[![Support me on kofi](https://www.ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/stringweasel)
 
 ## Features:
 - When docked in `passive` mode the docked spidertron wil cost _zero_ integrity, however it's functionality will be fully disabled.
