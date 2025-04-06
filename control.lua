@@ -694,10 +694,10 @@ local function interface_get_connected_dock(interface)
     -- Map between interface direction to the offset where we
     -- expect the dock entity.
     local circuit_offset_map = {
-        [0] = {0, 1},
-        [2] = {-1, 0},
-        [4] = {0, -1},
-        [6] = {1, 0},
+        [defines.direction.north]   = { 0,  1},
+        [defines.direction.east]    = {-1,  0},
+        [defines.direction.south]   = { 0, -1},
+        [defines.direction.west]    = { 1,  0},
     }
     local search_offset = circuit_offset_map[interface.direction]
     if not search_offset then error("Unexpected interface direction") end
