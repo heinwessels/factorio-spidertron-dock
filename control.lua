@@ -640,10 +640,9 @@ script.on_event(defines.events.on_player_used_spidertron_remote,
 
             -- Now we know the current spider is not a docked version. Check if the player
             -- is directing a spider to a dock to dock the spider
-            local dock = spider.surface.find_entity("ss-spidertron-dock-active", event.position)
-            if not dock then
-                dock = spider.surface.find_entity("ss-spidertron-dock-passive", event.position)
-            end
+            local dock = player.selected
+            if not dock then return end
+            if not name_is_dock(dock.name) then return end
             if dock then
                 -- This waypoint was placed on a valid dock!
                 -- Arm the dock so that spider is allowed to dock there
@@ -651,6 +650,10 @@ script.on_event(defines.events.on_player_used_spidertron_remote,
                 if dock.force ~= spider.force then return end
                 if dock_data.occupied then return end
                 spider_data.armed_for = dock
+
+                -- Force the spider to go to the exact position of the dock because
+                -- it will choose a random position around the dock otherwise
+                spider.autopilot_destination = dock.position
             else
                 -- The player directed the spider somewhere else
                 -- that's not a dock command. So remove any pending
@@ -856,7 +859,8 @@ script.on_event(defines.events.script_raised_destroy, on_deconstructed)
 
 ---@param dock LuaEntity
 ---@param new_mode "active"|"passive"|nil
-local function dock_switch_to_mode(dock, new_mode)
+---@param player LuaPlayer? if initiated by a specific player
+local function dock_switch_to_mode(dock, new_mode, player)
     local dock_data = storage.docks[dock.unit_number]
 
     if not new_mode then
@@ -911,12 +915,14 @@ local function dock_switch_to_mode(dock, new_mode)
         }
     end
 
-    dock.surface.create_entity{
-        name = "flying-text",
-        position = dock.position,
-        text = {"sd-spidertron-dock.mode-to-"..new_dock_data.mode},
-        color = {r=1,g=1,b=1,a=1},
-    }
+    for _, other_player in pairs(player and {player} or dock.force.connected_players) do
+        other_player.create_local_flying_text{
+            position = dock.position,
+            surface = dock.surface,
+            text = {"sd-spidertron-dock.mode-to-"..new_dock_data.mode},
+            color = {r=1,g=1,b=1,a=1},
+        }
+    end
 
     -- Remove the old dock data first otherwise the deconstrcut handler
     -- will think the dock is still occupied
@@ -944,7 +950,7 @@ script.on_event("ss-spidertron-dock-toggle", function(event)
 
     -- By this point we know that this is a dock the player can toggle
     -- We need to be careful with the data
-    dock_switch_to_mode(dock, nil)  -- nil means toggle    
+    dock_switch_to_mode(dock, nil, player)  -- nil means toggle    
 end)
 
 -- We can move docks with picker dollies, regardless
@@ -1435,20 +1441,21 @@ if script.active_mods["SpidertronEnhancements"] then
         if not player then return end
         local cursor_item = player.cursor_stack
         if cursor_item and cursor_item.valid_for_read and (cursor_item.type == "spidertron-remote" and cursor_item.name ~= "sp-spidertron-patrol-remote") then
-            local spider = cursor_item.connected_entity
-            if spider and string.match(spider.name, "ss[-]docked[-]") then            
-                -- Prevent the auto pilot in case, but shouldn't be required
-                spider.follow_target = nil
-                spider.autopilot_destination = nil
+            for _, spider in pairs(player.spidertron_remote_selection) do
+                if spider and string.match(spider.name, "ss[-]docked[-]") then            
+                    -- Prevent the auto pilot in case, but shouldn't be required
+                    spider.follow_target = nil
+                    spider.autopilot_destination = nil
 
-                -- Let the player know
-                spider.surface.play_sound{path="ss-no-no", position=spider.position}
-                spider.surface.create_entity{
-                    name = "flying-text",
-                    position = spider.position,
-                    text = {"sd-spidertron-dock.cannot-command"},
-                    color = {r=1,g=1,b=1,a=1},
-                }
+                    -- Let the player know
+                    spider.surface.play_sound{path="ss-no-no", position=spider.position}
+                    player.create_local_flying_text{
+                        position = spider.position,
+                        surface = spider.surface,
+                        text = {"sd-spidertron-dock.cannot-command"},
+                        color = {r=1,g=1,b=1,a=1},
+                    }
+                end
             end
         end
     end

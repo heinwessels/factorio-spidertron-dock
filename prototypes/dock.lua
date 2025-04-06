@@ -29,30 +29,32 @@ local dock_active = {
       render_no_network_icon = false,
       render_no_power_icon = false,
     },
-    picture =
-    {
-      layers =
+    chargable_graphics = {
+      picture =
       {
+        layers =
         {
-          filename = "__spidertron-dock__/graphics/spidertron-dock/hr-dock.png",
-          priority = "low",
-          width = 113,
-          height = 120,
-          direction_count = 1,
-          shift = util.by_pixel(0, -4),
-          scale = 0.6,
-        },
-        {
-            filename = "__spidertron-dock__/graphics/spidertron-dock/dock-shadow.png",
+          {
+            filename = "__spidertron-dock__/graphics/spidertron-dock/hr-dock.png",
             priority = "low",
-            width = 126,
-            height = 80,
+            width = 113,
+            height = 120,
             direction_count = 1,
-            shift = util.by_pixel(20, 6),
+            shift = util.by_pixel(0, -4),
             scale = 0.6,
-            draw_as_shadow = true,
-        },
-      }
+          },
+          {
+              filename = "__spidertron-dock__/graphics/spidertron-dock/dock-shadow.png",
+              priority = "low",
+              width = 126,
+              height = 80,
+              direction_count = 1,
+              shift = util.by_pixel(20, 6),
+              scale = 0.6,
+              draw_as_shadow = true,
+          },
+        }
+      },
     },
     vehicle_impact_sound = sounds.generic_impact,
     working_sound =
