@@ -12,10 +12,10 @@ local spider_tech = data.raw.technology.spidertron
 
 -- The second try
 if not spider_tech then
-    for _, technology in pairs(data.raw.technology) do		
-        if technology.effects then			
+    for _, technology in pairs(data.raw.technology) do
+        if technology.effects then
             for _, effect in pairs(technology.effects) do
-                if effect.type == "unlock-recipe" then					
+                if effect.type == "unlock-recipe" then
                     if effect.recipe == "spidertron" then
                         spider_tech = technology
                     end

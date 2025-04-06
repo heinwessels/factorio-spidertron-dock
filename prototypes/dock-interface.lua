@@ -1,10 +1,10 @@
+local item_sounds = require("__base__.prototypes.item_sounds")
+
 local interface = util.copy(data.raw["constant-combinator"]["constant-combinator"])
 interface.name = "sd-spidertron-dock-interface"
-interface.item_slot_count = 1
 interface.allow_copy_paste = false
 interface.icon = "__spidertron-dock__/graphics/spidertron-dock-interface/spidertron-dock-interface-icon.png"
 interface.icon_size = 64
-interface.icon_mipmaps = 0
 interface.minable.result = "sd-spidertron-dock-interface"
 interface.radius_visualisation_specification = {
     offset = {0, 1},
@@ -32,7 +32,7 @@ for x, direction in pairs{"north", "east", "south", "west"} do
         },
         {
             draw_as_shadow = true,
-            filename = "__base__/graphics/entity/combinator/hr-constant-combinator-shadow.png",
+            filename = "__base__/graphics/entity/combinator/constant-combinator-shadow.png",
             frame_count = 1,
             height = 66,
             priority = "high",
@@ -54,6 +54,9 @@ local interface_item = {
     stack_size = 20,
     subgroup = "transport",
     order = "b[personal-transport]-c[spidertron]-d[spidertron-dock-interface]",
+    inventory_move_sound = item_sounds.combinator_inventory_move,
+    pick_sound = item_sounds.combinator_inventory_pickup,
+    drop_sound = item_sounds.combinator_inventory_move,
     place_result = "sd-spidertron-dock-interface"
 }
 
@@ -64,11 +67,11 @@ local interface_recipe = {
     icon_size = interface.icon_size,
     enabled = false,
     ingredients = {
-        {"copper-cable", 5},
-        {"electronic-circuit", 10},
+        {type = "item", name = "copper-cable", amount = 5},
+        {type = "item", name = "electronic-circuit", amount = 10},
     },
     energy_required = 5,
-    result = "sd-spidertron-dock-interface"
+    results = {{type = "item", name = "sd-spidertron-dock-interface", amount = 1}},
 }
 
 data:extend{interface, interface_item, interface_recipe}

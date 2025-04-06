@@ -1,8 +1,11 @@
 ---------------------------------------------------------------------------------------------------
-Version: 1.0.5
+Version: 2.0.0
 Date: ??.??.2023
+  Features:
+    - Update to Factorio 2.0.
   Changes:
     - Spiderbots no longer able to dock. (Their legs are too short to step onto the dock).
+    - Removed Rocket Control Units from Spidertron Dock recipe.
   Bugfixes:
     - Fix crash when spidertron has no logistic slots (using Xorimuth's fix).
 ---------------------------------------------------------------------------------------------------

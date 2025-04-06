@@ -1,3 +1,4 @@
+local item_sounds = require("__base__.prototypes.item_sounds")
 local sounds = require("__base__.prototypes.entity.sounds")
 local util = require("__core__/lualib/util")
 
@@ -20,7 +21,7 @@ local dock_active = {
     discharge_cooldown = 60,
     energy_per_nearby_scan = "1J",
     energy_source = {
-      type = "void",
+      type = "electric",
       buffer_capacity = "1J",
       usage_priority = "tertiary",
       input_flow_limit = "1W",
@@ -33,28 +34,15 @@ local dock_active = {
       layers =
       {
         {
-              -- Using "HR" for both, since it's more like halfway between
-              -- high and normal resolution
-              filename = "__spidertron-dock__/graphics/spidertron-dock/hr-dock.png",
-              priority = "low",
-              width = 113,
-              height = 120,
-              direction_count = 1,
-              shift = util.by_pixel(0, -4),
-              scale = 0.6,
-              hr_version = {
-                  filename = "__spidertron-dock__/graphics/spidertron-dock/hr-dock.png",
-                  priority = "low",
-                  width = 113,
-                  height = 120,
-                  direction_count = 1,
-                  shift = util.by_pixel(0, -4),
-                  scale = 0.6,
-              }
-          },
-          {
-            -- Using "HR" for both, since it's more like halfway between
-            -- high and normal resolution
+          filename = "__spidertron-dock__/graphics/spidertron-dock/hr-dock.png",
+          priority = "low",
+          width = 113,
+          height = 120,
+          direction_count = 1,
+          shift = util.by_pixel(0, -4),
+          scale = 0.6,
+        },
+        {
             filename = "__spidertron-dock__/graphics/spidertron-dock/dock-shadow.png",
             priority = "low",
             width = 126,
@@ -63,17 +51,7 @@ local dock_active = {
             shift = util.by_pixel(20, 6),
             scale = 0.6,
             draw_as_shadow = true,
-            hr_version = {
-                filename = "__spidertron-dock__/graphics/spidertron-dock/dock-shadow.png",
-                priority = "low",
-                width = 126,
-                height = 80,
-                direction_count = 1,
-                shift = util.by_pixel(20, 6),
-                scale = 0.6,
-                draw_as_shadow = true,
-            }
-          },
+        },
       }
     },
     vehicle_impact_sound = sounds.generic_impact,
@@ -118,6 +96,9 @@ local dock_item = {
     icon_size = 64, icon_mipmaps = 4,
     subgroup = "transport",
     order = "b[personal-transport]-c[spidertron]-d[spidertron-dock]",
+    inventory_move_sound = item_sounds.mechanical_inventory_move,
+    pick_sound = item_sounds.mechanical_inventory_move,
+    drop_sound = item_sounds.mechanical_inventory_move,
     place_result = "ss-spidertron-dock-active",
     stack_size = 20
 }
@@ -128,12 +109,11 @@ local dock_recipe = {
     enabled = false,
     energy_required = 10,
     ingredients = {
-        {"steel-plate", 20},
-        {"low-density-structure", 10},
-        {"engine-unit", 10},        
-        {"rocket-control-unit", 5},
+        {type = "item", name = "steel-plate", amount = 20},
+        {type = "item", name = "low-density-structure", amount = 10},
+        {type = "item", name = "engine-unit", amount = 10},
     },
-    result = "ss-spidertron-dock"
+    results = {{type = "item", name = "ss-spidertron-dock", amount = 1}},
 }
 
 local dock_passive = util.table.deepcopy(dock_active)

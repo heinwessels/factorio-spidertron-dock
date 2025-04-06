@@ -23,22 +23,23 @@ local registry = require("registry")
 data:extend{{
     type = "spider-leg",
     name = "ss-dead-leg",
+    hidden = true,
     collision_box = nil,
-    collision_mask = {},
+    collision_mask = { layers = { }},
     selection_box = {{-0, -0}, {0, 0}},
     icon = "__base__/graphics/icons/spidertron.png",
-    icon_size = 64, icon_mipmaps = 4,
-    walking_sound_volume_modifier = 0,
-    target_position_randomisation_distance = 0,
-    minimal_step_size = 0,
-    working_sound = nil,
-    part_length = 1,
-    initial_movement_speed = 0,
-    movement_acceleration = 0,
-    max_health = 1,
-    movement_based_position_selection_distance = 0,
+    target_position_randomisation_distance = 0.25,
+    minimal_step_size = 1,
+    stretch_force_scalar = 1,
+    knee_height = 1,
+    knee_distance_factor = 0.4,
+    initial_movement_speed = 1,
+    movement_acceleration = 1,
+    max_health = 10000,
+    base_position_selection_distance = 1,
+    movement_based_position_selection_distance = 1,
     selectable_in_game = false,
-    graphics_set = create_spidertron_leg_graphics_set(0, 1)
+    alert_when_damaged = false,
 }}
 
 
@@ -112,9 +113,7 @@ function attempt_build_sprite(spider)
         -- TODO This can be smarter
         layer.x = layer.width * 4
         layer.y = layer.height * 4
-        layer.hr_version.x = layer.hr_version.width * 4
-        layer.hr_version.y = layer.hr_version.height * 4
-        
+
         if layer.apply_runtime_tint then
             table.insert(tint_layers, layer)
         else
@@ -136,9 +135,7 @@ function attempt_build_sprite(spider)
         -- TODO This can be smarter
         layer.x = layer.width * 4
         layer.y = layer.height * 4
-        layer.hr_version.x = layer.hr_version.width * 4
-        layer.hr_version.y = layer.hr_version.height * 4
-        
+
         table.insert(shadow_layers, layer)
     end
 
@@ -178,8 +175,10 @@ end
 -- if this dummy entity exist, which dictates if
 -- a spider type is dockable
 function attempt_docked_spider(spider)
-    
-    -- Some basic checks    
+
+    -- Some basic checks
+    if spider.hidden then return end
+    if spider.selectable_in_game == false then return end
     if not spider.graphics_set then return end
     if not spider.graphics_set.base_animation then return end
     if not spider.graphics_set.animation then return end
@@ -192,6 +191,7 @@ function attempt_docked_spider(spider)
     docked_spider.name = "ss-docked-"..spider.name
     docked_spider.localised_name = {"sd-spidertron-dock.docked-spider", spider.name}
     docked_spider.localised_description = {"sd-spidertron-dock.docked-spider-description"}
+    docked_spider.factoriopedia_alternative = spider.name
 
     if mods["aai-programmable-vehicles"] then
         -- Ensure that the docked variants won't be programmable.
@@ -199,7 +199,7 @@ function attempt_docked_spider(spider)
         docked_spider.order = docked_spider.order or ""
         docked_spider.order = docked_spider.order.."[no-aai]"
     end
-    
+
     docked_spider.minable = {result = nil, mining_time = 1}
     docked_spider.torso_bob_speed = 0
     docked_spider.allow_passengers = false
@@ -208,15 +208,16 @@ function attempt_docked_spider(spider)
     docked_spider.collision_box = nil
     docked_spider.minimap_representation = nil
     docked_spider.selected_minimap_representation = nil
+    docked_spider.allow_remote_driving = false
 
     -- Replace the leg with the invisible dead one
     docked_spider.spider_engine = {
-      legs = {{
-          leg = "ss-dead-leg",
-          mount_position = {0, 0},
-          ground_position = {0, 0},
-          blocking_legs = {1},
-          leg_hit_the_ground_trigger = nil
+        legs = {{
+            leg = "ss-dead-leg",
+            mount_position = {0, 0},
+            ground_position = {0, 0},
+            walking_group = 1,
+            leg_hit_the_ground_trigger = nil
         }}
     }
 
@@ -238,25 +239,6 @@ function attempt_docked_spider(spider)
             line_length = 8,
             -- 3 second loop, meaning 16 frames per 180 ticks
             animation_speed = 0.088, -- frames per tick
-
-            hr_version =
-            {
-                filename = "__spidertron-dock__/graphics/spidertron-dock/dock-light.png",
-                blend_mode = "additive",
-                direction_count = 1,
-                draw_as_glow = true,    -- Draws a sprite and a light
-                width = 19,
-                height = 19,
-                shift = { -0.42, 0.5 },
-                scale = 0.4,
-                tint = {r=0.173, g=0.824, b=0.251, a=1},
-                run_mode = "forward-then-backward",
-                frame_count = 16,
-                line_length = 8,
-
-                -- 3 second loop, meaning 16 frames per 180 ticks
-                animation_speed = 0.088, -- frames per tick
-            }
         }
     }}
     docked_spider.graphics_set.shadow_base_animation = util.empty_sprite(1)
@@ -291,7 +273,6 @@ for _, spider in pairs(data.raw["spider-vehicle"]) do
             for _, description in pairs({dock_active_description, dock_passive_description}) do
                 safely_insert_description(description, {"sd-spidertron-dock.supported-spider", spider.name})
             end
-            
         end
     end
 end
@@ -325,24 +306,6 @@ data:extend{
                 line_length = 8,
                 -- 3 second loop, meaning 16 frames per 180 ticks
                 animation_speed = 0.088, -- frames per tick
-
-                hr_version =
-                {
-                    filename = "__spidertron-dock__/graphics/spidertron-dock/dock-light.png",
-                    blend_mode = "additive",
-                    draw_as_glow = true,    -- Draws a sprite and a light
-                    width = 19,
-                    height = 19,
-                    shift = { -0.42, 0.5 },
-                    scale = 0.4,
-                    tint = {r=0.341, g=0.682, b=1, a=1},
-                    run_mode = "forward-then-backward",
-                    frame_count = 16,
-                    line_length = 8,
-
-                    -- 3 second loop, meaning 16 frames per 180 ticks
-                    animation_speed = 0.088, -- frames per tick
-                }
             }
         }
     }
