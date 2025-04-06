@@ -30,7 +30,7 @@ local lib = { table = { } }
 ---   [1] = 1000,
 --- }
 --- event.on_tick(function()
----   global.from_k = table.for_n_of(extremely_large_table, global.from_k, 10, function(v) game.print(v) end)
+---   storage.from_k = table.for_n_of(extremely_large_table, storage.from_k, 10, function(v) game.print(v) end)
 --- end)
 --- ```
 --- @param tbl table The table to iterate over.
