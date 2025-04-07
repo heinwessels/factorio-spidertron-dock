@@ -1519,11 +1519,6 @@ script.on_configuration_changed(function (event)
 
     update_runtime_mod_compatibility ()
     sanitize_docks()
-
-    -- Fix technologies and recipes
-    for _, force in pairs(game.forces) do
-        force.reset_technology_effects()
-    end
 end)
 
 -- The dock functionality is split of from the space-spidertron mod. We will 
