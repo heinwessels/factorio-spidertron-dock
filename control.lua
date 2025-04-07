@@ -1155,20 +1155,20 @@ function funcs.update_spider_gui_for_player(player, spider)
 
     -- Decide if we should rebuild. We will only build
     -- if the player is currently looking at this docked spider
-    if player.opened 
-            and (player.opened == spider) 
+    if player.opened
+            and (player.opened == spider)
             and spider_data.armed_for
             and spider_data.armed_for.valid then
         -- Build a new gui!
 
         -- Build starting frame
         local anchor = {
-            gui=defines.relative_gui_type.spider_vehicle_gui, 
+            gui=defines.relative_gui_type.spider_vehicle_gui,
             position=defines.relative_gui_position.top
         }
         local invisible_frame = player.gui.relative.add{
-            name="ss-docked-spider", 
-            type="frame", 
+            name="ss-docked-spider",
+            type="frame",
             style="ss_invisible_frame",
             anchor=anchor,
 
@@ -1216,8 +1216,8 @@ function funcs.update_dock_gui_for_player(player, dock)
             position=defines.relative_gui_position.top
         }
         local invisible_frame = player.gui.relative.add{
-            name="ss-spidertron-dock", 
-            type="frame", 
+            name="ss-spidertron-dock",
+            type="frame",
             style="ss_invisible_frame",
             anchor=anchor,
 
