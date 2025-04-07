@@ -3,11 +3,11 @@ local spidertron_lib = require("lib.spidertron_lib")
 local lib = require("lib.lib")
 
 local consts = {
-    occupied_signal = {type = "virtual", name="signal-O"},
-    recall_signal = {type = "virtual", name="signal-R"},
-    undock_signal = {type = "virtual", name="signal-U"},
-    active_mode_signal = {type = "virtual", name="signal-A"},
-    passive_mode_signal = {type = "virtual", name="signal-P"},
+    occupied_signal = {type = "virtual", name="signal-O", quality = "normal"},
+    recall_signal = {type = "virtual", name="signal-R", quality = "normal"},
+    undock_signal = {type = "virtual", name="signal-U", quality = "normal"},
+    active_mode_signal = {type = "virtual", name="signal-A", quality = "normal"},
+    passive_mode_signal = {type = "virtual", name="signal-P", quality = "normal"},
     dock_circuit_hysteresis = 120, -- In ticks
 }
 
@@ -54,7 +54,7 @@ end
 ---@field unit_number uint
 ---@field location {surface: LuaSurface, position: MapPosition} The surface and position of the interface. This ensures the interface can always be located, even if its type or unit number changes during migration.
 ---@field dock LuaEntity? The dock entity this interface is connected to. `nil` if the interface is not connected to any dock.
----@field control_behaviour LuaControlBehavior Cached control behavior of the constant combinator for quick setting of signals.
+---@field control_behaviour LuaConstantCombinatorControlBehavior Cached control behavior of the constant combinator for quick setting of signals.
 
 ---@param dock_entity LuaEntity
 ---@return DockData
@@ -187,7 +187,7 @@ local function dock_does_not_support_spider(dock, spider)
             -- So lets create a temporary one
             -- TODO This is so ugly, we need a better way!
             local temporary_spider = dock.surface.create_entity{
-                name=spider_name, 
+                name=spider_name,
                 position=dock.position,
                 create_build_effect_smoke=false,
                 raise_built=false,
@@ -355,8 +355,8 @@ end
 local function update_circuit_output_for_interfaces(interfaces)
 
     -- Now loop through all the interfaces and update them
-    for interface_unit_number, interface in pairs(interfaces) do
-        local interface_data = storage.interfaces[interface_unit_number]
+    for _, interface in pairs(interfaces) do
+        local interface_data = storage.interfaces[interface.unit_number]
         interface_data.control_behaviour.enabled = true
 
         -- Find the dock data, if there are any. We will still
@@ -369,15 +369,16 @@ local function update_circuit_output_for_interfaces(interfaces)
         end
 
         -- Now set the signals if there is dock_data, or clear it otherwise
+        -- And do this for all interfaces connected to this dock
         if dock_data and dock_data.occupied then
-            for interface_unit_number, interface in pairs(dock_data.interfaces) do
-                if interface.valid then
-                    interface_data = storage.interfaces[interface_unit_number]
-                    interface_data.control_behaviour.set_signal(1, {signal=consts.occupied_signal, count=1})
+            for interface_unit_number, other_interface in pairs(dock_data.interfaces) do
+                if other_interface.valid then
+                    other_interface_data = storage.interfaces[interface_unit_number]
+                    other_interface_data.control_behaviour.get_section(1).set_slot(1, {value=consts.occupied_signal, min=1})
                 end
             end
         else
-            interface_data.control_behaviour.set_signal(1,  nil)
+            interface_data.control_behaviour.get_section(1).clear_slot(1)
         end
     end
 end
@@ -1063,15 +1064,17 @@ local function dock_recall_last_spider(dock)
 end
 
 local wire_colours = {red = defines.wire_type.red, green = defines.wire_type.green}
+---@param dock_data DockData
+---@param dock_unit_number uint
 local function update_dock_circuits(dock_data, dock_unit_number)
     if not next(dock_data.interfaces) then return end
 
     -- Ensure we don't check this network too often
-    local tick = game.tick    
+    local tick = game.tick
     if dock_data.circuit_hysteresis and tick < dock_data.circuit_hysteresis then return end
     dock_data.circuit_hysteresis = tick + consts.dock_circuit_hysteresis
 
-    -- Sanity check, this should never happen
+    -- Sanity heck, this should never happen
     local dock = dock_data.dock_entity
     if not dock or not dock.valid then return end
 
@@ -1080,28 +1083,37 @@ local function update_dock_circuits(dock_data, dock_unit_number)
     -- we only check for commands that can be executed, so if there's two commands from differetn
     -- interface they will be executed sequentially with a 1 second gap, which is fine. Will
     -- probably not happen often anyway, most players will use one interface.
-    for interface_unit_number, interface in pairs(dock_data.interfaces) do
+    for _, interface in pairs(dock_data.interfaces) do
 
         -- We read the merged signal, instead of caching get_circuit_network so that the circuits
         -- behave consistently with vanilla entities. 
-        local get_merged_signal = interface.get_merged_signal  -- JanSharp says this is even better, thanks! :D
-        if dock_data.occupied and get_merged_signal(consts.undock_signal) > 0 then
+        local get_merged_signal = interface.get_signal  -- JanSharp says this is even better, thanks! :D
+        if dock_data.occupied and get_merged_signal(
+                                                    consts.undock_signal,
+                                                    defines.wire_connector_id.circuit_green,
+                                                    defines.wire_connector_id.circuit_red) > 0 then
             attempt_undock(dock_data)
             return
 
         -- Only check if there is a recal signal if there is a spider to recal
-        elseif dock_data.last_docked_spider 
-                and dock_data.last_docked_spider.valid 
-                and get_merged_signal(consts.recall_signal) > 0 then            
+        elseif dock_data.last_docked_spider
+                and dock_data.last_docked_spider.valid
+                and get_merged_signal(consts.recall_signal,
+                                     defines.wire_connector_id.circuit_green,
+                                     defines.wire_connector_id.circuit_red) > 0 then
             dock_recall_last_spider(dock)
             -- This will periodically still re-issue the recall command. That's fine,
             -- because this will probably not happen often anyway.
             return
 
-        elseif dock_data.mode == "active" and get_merged_signal(consts.passive_mode_signal) > 0 then
+        elseif dock_data.mode == "active" and get_merged_signal(consts.passive_mode_signal,
+                                                                defines.wire_connector_id.circuit_green,
+                                                                defines.wire_connector_id.circuit_red) > 0 then
             dock_switch_to_mode(dock, "passive")
             return
-        elseif dock_data.mode == "passive" and get_merged_signal(consts.active_mode_signal) > 0 then
+        elseif dock_data.mode == "passive" and get_merged_signal(consts.active_mode_signal,
+                                                                defines.wire_connector_id.circuit_green,
+                                                                defines.wire_connector_id.circuit_red) > 0 then
             dock_switch_to_mode(dock, "active")
             return
         end
