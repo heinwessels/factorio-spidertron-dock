@@ -212,48 +212,48 @@ local function draw_docked_spider(dock, spider_name, color)
     -- This assumes we're not drawing the bottom
     local offset = {0, -0.35}
     local render_layer = "object"
+    local target = {
+        entity = dock,
+        offset = offset,
+    } --[[@as ScriptRenderTarget]]
 
     -- Draw shadows
-    table.insert(dock_data.docked_sprites, 
+    table.insert(dock_data.docked_sprites,
         rendering.draw_sprite{
-            sprite = "ss-docked-"..spider_name.."-shadow", 
-            target = dock, 
+            sprite = "ss-docked-"..spider_name.."-shadow",
+            target = target,
             surface = dock.surface,
-            target_offset = offset,
             render_layer = render_layer,
         }
     )
 
     -- First draw main layer
-    table.insert(dock_data.docked_sprites, 
+    table.insert(dock_data.docked_sprites,
         rendering.draw_sprite{
-            sprite = "ss-docked-"..spider_name.."-main", 
-            target = dock, 
+            sprite = "ss-docked-"..spider_name.."-main",
+            target = target,
             surface = dock.surface,
-            target_offset = offset,
             render_layer = render_layer,
         }
     )
 
     -- Then draw tinted layer
-    table.insert(dock_data.docked_sprites, 
+    table.insert(dock_data.docked_sprites,
         rendering.draw_sprite{
-            sprite = "ss-docked-"..spider_name.."-tint", 
-            target = dock, 
+            sprite = "ss-docked-"..spider_name.."-tint",
+            target = target,
             surface = dock.surface,
             tint = color,
-            target_offset = offset,
             render_layer = render_layer,
         }
     )
 
     -- Finally draw the light animation
-    table.insert(dock_data.docked_sprites, 
+    table.insert(dock_data.docked_sprites,
         rendering.draw_animation{
-            animation = "ss-docked-light", 
-            target = dock, 
+            animation = "ss-docked-light",
+            target = target,
             surface = dock.surface,
-            target_offset = offset,
             render_layer = render_layer,
             animation_offset = math.random(15) -- Not sure how to start at frame 0
         }
@@ -264,7 +264,7 @@ end
 -- their entries in it's data
 local function pop_dock_sprites(dock_data)
     for _, sprite in pairs(dock_data.docked_sprites) do
-        rendering.destroy(sprite)
+        sprite.destroy() -- Works even if invalid
     end
     dock_data.docked_sprites = {}
 end
