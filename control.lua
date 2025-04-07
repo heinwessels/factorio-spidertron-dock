@@ -28,115 +28,71 @@ local function name_is_docked_spider(name)
     return not (string.match(name, "ss[-]docked[-]") == nil)
 end
 
+---@class DockData
+---@field occupied boolean
+---@field spider_name string? Remember the normal type of the spider docked here. This value might not be cleaned when the spider undocked
+---@field docked_spider LuaEntity? Keep a reference to the docked spider. Only used when in `active` mode
+---@field docked_sprites LuaRenderObject[] Keep track of sprites drawed so we can pop them out later.
+---@field serialised_spider SerialisedSpidertron? Keeps a serialised version of the spider. Only used when in `passive` mode
+---@field dock_entity LuaEntity Can be nil when something goes wrong
+---@field unit_number uint
+---@field mode "passive"|"active"
+---@field last_docked_spider LuaEntity? Keep track of the spider that was docked last so that we can summon it
+---@field location {surface: LuaSurface, position: MapPosition} This is so that we can always find where this dock is, even if the type and unit number change during migration.
+---@field interfaces table<uint, LuaEntity> Map of interfaces referenced by their unit numbers
+---@field circuit_hysteresis uint? Store the next tick that this dock is allowed to do circuit any operation to prevent a rapid dock/undock cycle when both signals are applied
+
+---@class SpiderData
+---@field armed_for LuaEntity? The dock entity this spider is armed for. A spider will only attempt to dock if it is armed for a specific dock upon reaching it at the end of its waypoint.
+---@field spider_entity LuaEntity? The actual spider entity
+---@field unit_number uint
+---@field last_used_dock LuaEntity? A reference to the last dock this spider docked to. This allows the "return to dock" functionality. If the dock is invalid or occupied, the spider will fail to dock.
+---@field original_spider_name string? The name of the original spider entity before it was docked. This is only populated if the spider is in its docked variant.
+---@field recall_target LuaEntity? The dock entity recalling this spider. This is populated when the spider is recalled via circuit or GUI, ensuring the command is not actively given again.
+
+---@class InterfaceData
+---@field unit_number uint
+---@field location {surface: LuaSurface, position: MapPosition} The surface and position of the interface. This ensures the interface can always be located, even if its type or unit number changes during migration.
+---@field dock LuaEntity? The dock entity this interface is connected to. `nil` if the interface is not connected to any dock.
+---@field control_behaviour LuaControlBehavior Cached control behavior of the constant combinator for quick setting of signals.
+
+---@param dock_entity LuaEntity
+---@return DockData
 local function create_dock_data(dock_entity)
     return {
         occupied = false,
-
-        -- Remember the normal type of the spider docked here
-        -- Note: This value might not be cleaned when the spider undocked
-        spider_name = nil,
-
-        -- Keep a reference to the docked spider
-        -- Only used when in `active` mode
-        docked_spider = nil,
-
-        -- Keep track of sprites drawed so we
-        -- can pop them out later.
         docked_sprites = {},
-
-        -- Keeps a serialised version of the spider
-        -- Only used when in `passive` mode
         serialised_spider = nil,
-
-        -- Can be nil when something goes wrong
         dock_entity = dock_entity,
-
-        -- Keep this in here so that it's easy to
-        -- find this entry in storage
         unit_number = dock_entity.unit_number,
-
-        -- 'active' or `passive`. 
-        -- Dictates if an actual spider is placed
-        -- while docking, or only a sprite.
         mode = string.find(dock_entity.name, "passive") and "passive" or "active",
-
-        -- Keep track of the spider that was docked last so that
-        -- we can summon it
         last_docked_spider = nil,
-
-        -- This is so that we can always find where this dock
-        -- is, even if the type and unit number change during migration.
         location = {
             surface = dock_entity.surface,
             position = dock_entity.position,
         },
-
-        -- Map of interfaces referenced by their unit numbers, linked to
-        -- the interface entity. A dock can have multiple interfaces.
         interfaces = { },
-
-        -- Store the next tick that this dock is allowed to do circuit any operation
-        -- This is to prevent a rapid dock/undock cycle when both signals are applied
-        circuit_hysteresis = nil,
     }
 end
 
+---@param spider_entity LuaEntity
+---@return SpiderData
 local function create_spider_data(spider_entity)
     return {
-        -- A spider will only attempt to dock
-        -- if it's armed for that dock in
-        -- particular upon reaching it at
-        -- the end of the waypoint.
-        -- It's attempted to be set when the
-        -- player uses the spidertron remote.
-        armed_for = nil, -- Dock entity
-
-        -- Can be nil when something goes wrong
         spider_entity = spider_entity,
-
-        -- Keep this in here so that it's easy to
-        -- find this entry in storage
         unit_number = spider_entity.unit_number,
-
-        -- Store a reference to the last dock this
-        -- spider docked to. It's so that you can 
-        -- click "return to dock" on a spider.
-        -- This system will be dum, so if the dock
-        -- is no longer valid then it will do nothing.
-        -- If the dock is occupied then it will still return
-        -- but simply fail to dock
-        last_used_dock = nil,
-
-        -- This field will only be true if this spider is
-        -- the docked variant. It contains the actual
-        -- spider name that is docked.
-        original_spider_name = nil,
-
-        -- This will be populated by the dock recalling this spider
-        -- when done through circuit or GUI. It's so that the command
-        -- isn't actively given.
-        recall_target = nil
     }
 end
 
+---@param interface LuaEntity
+---@return InterfaceData
 local function create_interface_data(interface)
     return {
-        -- Keep this in here so that it's easy to
-        -- find this entry in storage
         unit_number = interface.unit_number,
-
-        -- This is so that we can always find where this interface
-        -- is, even if the type and unit number change during migration.
         location = {
             surface = interface.surface,
             position = interface.position,
         },
-
-        -- The dock entity this interface is connected to
-        dock = nil,
-
-        -- Cache this constant combinator's control behaviour
-        -- for quick setting of signals.
         control_behaviour = interface.get_control_behavior(),
     }
 end
@@ -146,7 +102,7 @@ end
 -- sound and create some flying text
 local function dock_error(dock, text)
     dock.surface.play_sound{
-        path="ss-no-no", 
+        path="ss-no-no",
         position=dock.position
     }
     dock.surface.create_entity{
@@ -1124,7 +1080,7 @@ local function update_dock_circuits(dock_data, dock_unit_number)
     -- we only check for commands that can be executed, so if there's two commands from differetn
     -- interface they will be executed sequentially with a 1 second gap, which is fine. Will
     -- probably not happen often anyway, most players will use one interface.
-    for interface_unit_number, interface in pairs(dock_data.interfaces) do       
+    for interface_unit_number, interface in pairs(dock_data.interfaces) do
 
         -- We read the merged signal, instead of caching get_circuit_network so that the circuits
         -- behave consistently with vanilla entities. 
@@ -1403,6 +1359,7 @@ local function sanitize_docks()
     end
 end
 
+---@return table<string, boolean>
 local function build_spider_whitelist()
     local whitelist = {}
     local spiders = prototypes.get_entity_filtered({{filter="type", type="spider-vehicle"}})
@@ -1538,9 +1495,13 @@ script.on_configuration_changed(function (event)
     end
 
     -- And now starts the happy flow.
+    ---@type table<uint, DockData>
     storage.docks = storage.docks or {}
+    ---@type table<uint, SpiderData>
     storage.spiders = storage.spiders or {}
+    ---@type table<string, boolean>
     storage.spider_whitelist = build_spider_whitelist()
+    ---@type table<uint, InterfaceData>
     storage.interfaces = storage.interfaces or {}
     storage.players = storage.players or {}
 
