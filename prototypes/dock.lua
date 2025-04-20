@@ -143,6 +143,10 @@ for i, dock in pairs({dock_active, dock_passive, dock_hidden}) do
   end
   table.insert(dock.localised_description, {"sd-spidertron-dock.description-mode-"..(i==1 and "active" or "passive")})
   table.insert(dock.localised_description, {"sd-spidertron-dock.description-use"})
-  dock.factoriopedia_description = table.deepcopy(dock.localised_description)
-  table.insert(dock.factoriopedia_description, {"sd-spidertron-dock.supported"})
+
+  dock.factoriopedia_description = {"",
+    {"sd-spidertron-dock.description"..( mods["space-exploration"] and "-se" or "")},
+    {"sd-spidertron-dock.factoriopedia-description"},
+    {"sd-spidertron-dock.supported"},
+  }
 end
