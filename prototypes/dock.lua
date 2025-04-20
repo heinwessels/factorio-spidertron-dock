@@ -6,6 +6,7 @@ local dock_active = {
     -- Type radar so that we have an animation to work with
     type = "accumulator",
     name = "ss-spidertron-dock-active",
+    factoriopedia_alternative = "ss-spidertron-dock",
     localised_name = {"entity-name.ss-spidertron-dock"},
     icon = "__spidertron-dock__/graphics/spidertron-dock/dock-icon.png",
     placeable_by = {item="ss-spidertron-dock", count=1},
@@ -120,15 +121,20 @@ local dock_recipe = {
 
 local dock_passive = util.table.deepcopy(dock_active)
 dock_passive.name = "ss-spidertron-dock-passive"
+dock_passive.factoriopedia_alternative = "ss-spidertron-dock"
 
-data:extend{dock_active, dock_passive, dock_item, dock_recipe}
+local dock_hidden = util.table.deepcopy(dock_active)
+dock_hidden.name = "ss-spidertron-dock"
+dock_hidden.hidden = true -- This is a little hacky, but it works
+
+data:extend{dock_active, dock_passive, dock_hidden, dock_item, dock_recipe}
 
 
 -- Create descriptions
 dock_active = data.raw.accumulator["ss-spidertron-dock-active"]
 dock_passive = data.raw.accumulator["ss-spidertron-dock-passive"]
 
-for i, dock in pairs({dock_active, dock_passive}) do
+for i, dock in pairs({dock_active, dock_passive, dock_hidden}) do
   dock.localised_description = {""}
   if mods["space-exploration"] then
     table.insert(dock.localised_description, {"sd-spidertron-dock.description-se"})
@@ -137,5 +143,6 @@ for i, dock in pairs({dock_active, dock_passive}) do
   end
   table.insert(dock.localised_description, {"sd-spidertron-dock.description-mode-"..(i==1 and "active" or "passive")})
   table.insert(dock.localised_description, {"sd-spidertron-dock.description-use"})
-  table.insert(dock.localised_description, {"sd-spidertron-dock.supported"})
+  dock.factoriopedia_description = table.deepcopy(dock.localised_description)
+  table.insert(dock.factoriopedia_description, {"sd-spidertron-dock.supported"})
 end

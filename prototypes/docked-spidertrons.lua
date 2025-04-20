@@ -189,7 +189,7 @@ function attempt_docked_spider(spider)
     -- Good enough to start the construction attempt
     local docked_spider = util.copy(spider)
     docked_spider.name = "ss-docked-"..spider.name
-    docked_spider.localised_name = {"sd-spidertron-dock.docked-spider", spider.name}
+    docked_spider.localised_name = {"sd-spidertron-dock.docked-spider", {"entity-name."..spider.name}}
     docked_spider.localised_description = {"sd-spidertron-dock.docked-spider-description"}
     docked_spider.factoriopedia_alternative = spider.name
 
@@ -261,17 +261,21 @@ end
 -- Loop through all spider vehicles
 local found_at_least_one = false
 local docked_spiders = {}   -- Cannot insert in the loop, otherwise infinite loop
-local dock_active_description = data.raw.accumulator["ss-spidertron-dock-active"].localised_description
-local dock_passive_description = data.raw.accumulator["ss-spidertron-dock-passive"].localised_description
+local dock_active_description = data.raw.accumulator["ss-spidertron-dock-active"].factoriopedia_description
+local dock_passive_description = data.raw.accumulator["ss-spidertron-dock-passive"].factoriopedia_description
 for _, spider in pairs(data.raw["spider-vehicle"]) do
     if not registry.is_blacklisted(spider) then
         local docked_spider = attempt_docked_spider(spider)
-        if docked_spider then 
+        if docked_spider then
             table.insert(docked_spiders, docked_spider)
             found_at_least_one = true
 
             for _, description in pairs({dock_active_description, dock_passive_description}) do
-                safely_insert_description(description, {"sd-spidertron-dock.supported-spider", spider.name})
+                safely_insert_description(description, {
+                    "",
+                    "\n[img=entity/"..spider.name.."]",
+                    {"entity-name."..spider.name},
+                })
             end
         end
     end
