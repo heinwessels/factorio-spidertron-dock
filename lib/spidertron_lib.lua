@@ -1,6 +1,6 @@
 --[[
 Thanks Xorimuth for this library!
-Commit: https://github.com/tburrows13/SpidertronEnhancements/4b06735
+Commit: https://github.com/tburrows13/SpidertronEnhancements/commit/4b06735c20bd0538656d99a225611b42b9fb4d77
 ]]--
 
 
