@@ -1,4 +1,5 @@
 local util = require("__core__/lualib/util")
+local collision_mask_util = require("__core__/lualib/collision-mask-util")
 local spidertron_lib = require("lib.spidertron_lib")
 local lib = require("lib.lib")
 
@@ -117,30 +118,6 @@ local function dock_error(dock, text)
     end
 end
 
--- Based on the tool provided by Wube, but that tool
--- does not function during runtime, so I need to redo it
-local function collision_masks_collide(mask_1, mask_2)
-
-    local clear_flags = function(map)
-        for k, flag in pairs ({
-            "consider-tile-transitions",
-            "not-colliding-with-itself",
-            "colliding-with-tiles-only"
-          }) do
-            map[flag] = nil
-        end
-    end
-
-    clear_flags(mask_1)
-    clear_flags(mask_2)
-
-    for layer, _ in pairs (mask_2) do
-      if mask_1[layer] then
-        return true
-      end
-    end
-    return false
-end
 
 local only_allow_spiders_in_space =
     script.active_mods["space-exploration"] and script.active_mods["space-spidertron"]
@@ -182,27 +159,11 @@ local function dock_does_not_support_spider(dock, spider)
         -- Only do it if we care about it though
 
         local tile_collision_mask = dock.surface.get_tile(dock.position).prototype.collision_mask
-        local leg_collision_mask = nil
-        if spider then
-            leg_collision_mask = util.table.deepcopy(
-                spider.get_spider_legs()[1].prototype.collision_mask)
-        else
-            -- We don't have a valid spider to get the leg-name from. 
-            -- So lets create a temporary one
-            -- TODO This is so ugly, we need a better way!
-            local temporary_spider = dock.surface.create_entity{
-                name=spider_name,
-                position=dock.position,
-                create_build_effect_smoke=false,
-                raise_built=false,
-            }
-            leg_collision_mask = util.table.deepcopy(
-                temporary_spider.get_spider_legs()[1].prototype.collision_mask)
-            temporary_spider.destroy() -- Destroy it after looking at it's leg!
-        end
+        local leg_name = prototypes.entity[spider_name].spider_engine.legs[1].leg
+        local leg_collision_mask = prototypes.entity[leg_name].collision_mask
 
         -- If the leg would collide with the tile then it's not supported
-        if collision_masks_collide(tile_collision_mask, leg_collision_mask) then
+        if collision_mask_util.masks_collide(tile_collision_mask, leg_collision_mask) then
             return {"sd-spidertron-dock.spider-not-supported-on-tile"}
         end
     end

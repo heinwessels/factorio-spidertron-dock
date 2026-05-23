@@ -3,6 +3,7 @@ Version: 2.0.1
 Date: 23.05.2025
   Bugfixes:
     - Fix crash in certain conditions when displaying a dock error message. (Thanks Raycrash!)
+    - Fix docks incorrectly determining if spiders are dockable on a specific tile.
 ---------------------------------------------------------------------------------------------------
 Version: 2.0.0
 Date: 27.09.2025
