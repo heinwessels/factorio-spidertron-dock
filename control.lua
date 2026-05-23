@@ -100,17 +100,21 @@ end
 -- An function to call when an dock action
 -- was not allowed. It will play the "no-no"
 -- sound and create some flying text
+---@param dock LuaEntity
+---@param text LocalisedString
 local function dock_error(dock, text)
     dock.surface.play_sound{
         path="ss-no-no",
         position=dock.position
     }
-    dock.surface.create_entity{
-        name = "flying-text",
-        position = dock.position,
-        text = text,
-        color = {r=1,g=1,b=1,a=1},
-    }
+    for _, player in pairs(dock.force.connected_players) do
+        player.create_local_flying_text{
+            text = text,
+            surface = dock.surface,
+            position = dock.position,
+            color = {r=1,g=1,b=1,a=1},
+        }
+    end
 end
 
 -- Based on the tool provided by Wube, but that tool
